@@ -155,16 +155,20 @@ tfoot .num{color:var(--text)}
 /* ============ Gallery ============ */
 .gal-grp{margin-bottom:26px}
 .gal-grp h4{margin:0 0 12px;font-size:13.5px;font-weight:400;color:var(--text-dim);display:flex;align-items:center;gap:8px}
-.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.gal{columns:190px;column-gap:8px}
+@media(min-width:900px){.gal{columns:220px}}
 .gcard{background:var(--bg-elev);border:1px solid var(--line-soft);border-radius:9px;overflow:hidden;cursor:pointer;
-  transition:transform .12s,border-color .12s}
-.gcard:hover{border-color:var(--line);transform:translateY(-2px)}
-.gcard .ph{height:132px;background:#111 center/cover no-repeat;display:grid;place-items:center;color:var(--text-faint);
-  font-size:12px;border-bottom:1px solid var(--line-soft)}
-.gcard .bd{padding:10px 11px}
+  break-inside:avoid;margin:0 0 8px;position:relative;transition:border-color .12s}
+.gcard:hover{border-color:var(--line)}
+.gcard img.shot{width:100%;height:auto;display:block}
+.gcard .ph{aspect-ratio:16/10;background:#141414;display:grid;place-items:center;color:var(--text-faint);
+  font-size:11.5px;border-bottom:1px solid var(--line-soft)}
+.gcard .cnt{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.66);color:#fff;font-size:10.5px;
+  padding:2px 7px;border-radius:20px}
+.gcard .bd{padding:8px 10px}
 .gcard .bd .r{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.gcard .bd .r+.r{margin-top:7px}
-.gcard .nm{color:#fff;font-weight:600;font-size:14px}
+.gcard .bd .r+.r{margin-top:5px}
+.gcard .nm{color:#fff;font-weight:600;font-size:13.5px}
 
 /* ============ Dashboard ============ */
 .dash{display:flex;flex-direction:column;gap:26px}
@@ -184,6 +188,13 @@ tfoot .num{color:var(--text)}
 .panel h3{margin:0 0 16px;font-size:13.5px;font-weight:400;color:var(--text-dim);display:flex;align-items:center;gap:8px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 @media(max-width:820px){.two{grid-template-columns:1fr}}
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:11px;overflow:hidden}
+@media(max-width:720px){.statgrid{grid-template-columns:repeat(2,1fr)}}
+.statcell{background:var(--bg-elev);padding:13px 14px}
+.statcell .k{color:var(--text-dim);font-size:11px;letter-spacing:.3px}
+.statcell .val{font-size:19px;font-weight:700;margin-top:6px;letter-spacing:-.3px}
+.capinput{background:var(--bg);border:1px solid var(--line);border-radius:6px;height:30px;padding:0 8px;width:100%;max-width:130px;color:#fff;font-size:15px;margin-top:5px}
+.capinput:focus{border-color:var(--accent);outline:none}
 
 /* vertical bars */
 .vbars{display:flex;align-items:flex-end;gap:22px;height:190px;padding:0 6px}
@@ -195,15 +206,16 @@ tfoot .num{color:var(--text)}
 
 /* horizontal bars (centered zero) */
 .hbars{display:flex;flex-direction:column;gap:6px}
-.hrow{display:grid;grid-template-columns:84px 1fr 68px;align-items:center;gap:10px;font-size:12.5px}
+.hrow{display:grid;grid-template-columns:82px 1fr 86px;align-items:center;gap:10px;font-size:12.5px}
 .hrow .d{color:var(--text-dim);text-align:right;white-space:nowrap}
-.hrow .v{text-align:right;white-space:nowrap;font-size:12px}
+.hrow .v{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;white-space:nowrap;font-size:12px}
+.hrow .v .vp{color:var(--text-faint);font-size:10.5px}
 .hbar{position:relative;height:16px;background:linear-gradient(90deg,transparent calc(50% - .5px),var(--line) calc(50% - .5px),var(--line) calc(50% + .5px),transparent calc(50% + .5px))}
 .hbar .b{position:absolute;top:0;height:100%;border-radius:2px;transition:width .4s cubic-bezier(.2,.7,.3,1)}
 
 /* line / equity */
 .linewrap{width:100%;overflow:hidden}
-svg.line{width:100%;height:230px;display:block}
+svg.line{width:100%;height:auto;max-height:340px;display:block}
 
 /* empty */
 .empty{color:var(--text-dim);font-size:14px;padding:60px 10px;text-align:center;border:1px dashed var(--line);border-radius:10px}
@@ -423,6 +435,8 @@ function money(n){
 }
 function signed(n){ return (n>0?"+":n<0?"":"")+money(n); }
 function moneyK(n){ const a=Math.abs(n); if(a>=1000) return (n<0?"-$":"$")+(a/1000).toFixed(1)+"k"; return money(n); }
+function pctOf(n){ const c=Number(state.settings.startingCapital)||0; return c>0 ? n/c*100 : 0; }
+function fmtPct(n){ return (n>0?"+":"")+n.toFixed(2)+"%"; }
 function cls(n){ return n>0?"pos":n<0?"neg":""; }
 function iso(d){ return d.toISOString().slice(0,10); }
 function parseISO(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
@@ -439,7 +453,7 @@ function sortedTrades(){
 function withEquity(){ let run=0; return sortedTrades().map(t=>{ run+=totalPnl(t); return {t,equity:run}; }); }
 
 /* ================= state + storage (IndexedDB, graceful) ================= */
-let state = {trades:[], ui:{tab:"list", calY:2026, calM:1}, settings:{lastContracts:4}};
+let state = {trades:[], ui:{tab:"list", calY:2026, calM:1}, settings:{lastContracts:4, startingCapital:150000}};
 let idb=null, memoryOnly=false, saveTimer=null;
 
 function openDB(){
@@ -540,7 +554,7 @@ function viewList(){
       <td class="num ${cls(acctPnl(t,'ts1'))}" style="text-align:right">${money(acctPnl(t,'ts1'))}</td>
       <td class="num ${cls(acctPnl(t,'ts2'))}" style="text-align:right">${money(acctPnl(t,'ts2'))}</td>
       <td class="num ${cls(acctPnl(t,'apex'))}" style="text-align:right">${money(acctPnl(t,'apex'))}</td>
-      <td class="num ${cls(tp)}" style="text-align:right;font-weight:600">${money(tp)}</td>
+      <td style="text-align:right"><div class="num ${cls(tp)}" style="font-weight:600">${money(tp)}</div><div class="num" style="color:var(--text-faint);font-size:11px">${fmtPct(pctOf(tp))}</div></td>
       <td style="text-align:center">${t.rules?'<span class="check-ok">✓</span>':'<span class="check-no">—</span>'}</td>
     </tr>`;}).join("");
   const s=stats();
@@ -564,7 +578,7 @@ function board(groups){
       return `<div class="card" data-id="${t.id}">
         ${cover?`<img class="cover" src="${cover}" alt="">`:''}
         <div class="r"><span class="name">MNQ</span>${outcomePill(t.outcome)}${dirPill(t.dir)}</div>
-        <div class="r"><span class="meta">${fmtDateLong(t.date)}</span><span class="meta num ${cls(totalPnl(t))}" style="margin-left:auto;font-weight:600">${money(totalPnl(t))}</span></div>
+        <div class="r"><span class="meta">${fmtDateLong(t.date)}</span><span class="meta num ${cls(totalPnl(t))}" style="margin-left:auto;font-weight:600">${money(totalPnl(t))} <span style="color:var(--text-faint);font-weight:400">${fmtPct(pctOf(totalPnl(t)))}</span></span></div>
       </div>`;}).join("")||`<div class="meta" style="color:var(--text-faint);padding:6px 2px">No trades</div>`;
     return `<div class="bcol">
       <div class="bcol-h">${g.head}<span class="count">${g.items.length}</span><span class="sum num ${cls(sum)}">${money(sum)}</span></div>
@@ -600,7 +614,7 @@ function viewCalendar(){
       const tp=totalPnl(t);
       return `<div class="ev" data-id="${t.id}">
         <div class="row1"><span class="tk">MNQ</span>${outcomePill(t.outcome)}</div>
-        <div class="pl num ${cls(tp)}">${signed(tp)}</div></div>`;
+        <div class="pl num ${cls(tp)}">${signed(tp)} <span style="color:var(--text-faint);font-size:10px">${fmtPct(pctOf(tp))}</span></div></div>`;
     }).join("");
     cells+=`<div class="cell" data-date="${ds}"><span class="dn num">${dnum}</span>${evs}</div>`;
   }
@@ -620,13 +634,14 @@ function viewGallery(){
     const items=sortedTrades().filter(t=>t.strategy===s);
     if(!items.length) return "";
     const cards=items.map(t=>{
-      const cover=t.images[0];
+      const cover=t.images[0], tp=totalPnl(t);
+      const media=cover?`<img class="shot" src="${cover}" alt="">`:`<div class="ph">no screenshot</div>`;
+      const badge=t.images.length>1?`<span class="cnt">${t.images.length}</span>`:"";
       return `<div class="gcard" data-id="${t.id}">
-        <div class="ph" style="${cover?`background-image:url('${cover}')`:''}">${cover?'':'no screenshot'}</div>
+        ${media}${badge}
         <div class="bd">
-          <div class="r"><span class="nm">MNQ</span>${outcomePill(t.outcome)}</div>
-          <div class="r"><span style="color:var(--text-dim);font-size:12.5px">${fmtDateLong(t.date)}</span>
-            <span class="num ${cls(totalPnl(t))}" style="margin-left:auto;font-size:12.5px;font-weight:600">${money(totalPnl(t))}</span></div>
+          <div class="r"><span class="nm">MNQ</span>${outcomePill(t.outcome)}<span class="num ${cls(tp)}" style="margin-left:auto;font-size:12px;font-weight:600">${money(tp)}</span></div>
+          <div class="r"><span style="color:var(--text-dim);font-size:11.5px">${fmtDateLong(t.date)}</span><span class="num" style="margin-left:auto;color:var(--text-faint);font-size:11px">${fmtPct(pctOf(tp))}</span></div>
         </div></div>`;}).join("");
     return `<div class="gal-grp"><h4>${stratPill(s)} <span style="color:var(--text-faint)">${items.length}</span></h4><div class="gal">${cards}</div></div>`;
   }).join("");
@@ -642,9 +657,19 @@ function stats(){
   ts.forEach(t=>{ ACCTS.forEach(a=>byAcct[a.k]+=acctPnl(t,a.k)); net+=totalPnl(t); });
   const byStrat={}; Object.keys(STRATS).forEach(s=>byStrat[s]=0);
   ts.forEach(t=>byStrat[t.strategy]+=totalPnl(t));
-  return {n,wins,losses,rules,net,byAcct,byStrat,
-    winRate:n?Math.round(wins/n*100):0, lossRate:n?Math.round(losses/n*100):0,
-    rulesRate:n?Math.round(rules/n*100):0};
+  const pnls=ts.map(totalPnl);
+  const winP=pnls.filter(v=>v>0), lossP=pnls.filter(v=>v<0);
+  const grossWin=winP.reduce((a,b)=>a+b,0), grossLoss=Math.abs(lossP.reduce((a,b)=>a+b,0));
+  const avgWin=winP.length?grossWin/winP.length:0, avgLoss=lossP.length?grossLoss/lossP.length:0;
+  const profitFactor=grossLoss>0?grossWin/grossLoss:(grossWin>0?Infinity:0);
+  const expectancyR=avgLoss>0?(net/(n||1))/avgLoss:0;
+  const best=pnls.length?Math.max(...pnls):0, worst=pnls.length?Math.min(...pnls):0;
+  const cap=Number(state.settings.startingCapital)||0;
+  let peak=cap,maxDD=0;
+  withEquity().forEach(d=>{ const bal=cap+d.equity; if(bal>peak)peak=bal; const dd=peak>0?(peak-bal)/peak*100:0; if(dd>maxDD)maxDD=dd; });
+  return {n,wins,losses,rules,net,byAcct,byStrat,grossWin,grossLoss,avgWin,avgLoss,profitFactor,expectancyR,best,worst,maxDD,cap,
+    currentBalance:cap+net, totalReturn:cap>0?net/cap*100:0,
+    winRate:n?Math.round(wins/n*100):0, lossRate:n?Math.round(losses/n*100):0, rulesRate:n?Math.round(rules/n*100):0};
 }
 
 /* ================= charts (hand-drawn SVG) ================= */
@@ -681,13 +706,14 @@ function hbars(data){ // [{label,value}]
     const bar=d.value>=0
       ? `<div class="b" style="left:50%;width:${w}%;background:${HUE.green}"></div>`
       : `<div class="b" style="right:50%;width:${w}%;background:${HUE.red}"></div>`;
-    return `<div class="hrow"><span class="d">${d.label}</span><div class="hbar">${bar}</div><span class="v num ${cls(d.value)}">${signed(d.value)}</span></div>`;
+    return `<div class="hrow"><span class="d">${d.label}</span><div class="hbar">${bar}</div><span class="v"><span class="num ${cls(d.value)}">${signed(d.value)}</span><span class="vp num">${fmtPct(pctOf(d.value))}</span></span></div>`;
   }).join("")+`</div>`;
 }
 function equityLine(){
   const data=withEquity(); if(data.length<1) return `<div class="empty">Log trades to build your equity curve.</div>`;
-  const W=760,H=200,pl=8,pr=40,pt=22,pb=26;
-  const xs=data.map((_,i)=>data.length===1?pl:(pl+(W-pl-pr)*i/(data.length-1)));
+  const W=760,H=250,pl=36,pr=48,pt=32,pb=42;
+  const n=data.length;
+  const xs=data.map((_,i)=>n===1?W/2:(pl+(W-pl-pr)*i/(n-1)));
   const ys=data.map(d=>d.equity);
   const min=Math.min(0,...ys), max=Math.max(0,...ys), span=(max-min)||1;
   const Y=v=>pt+(H-pt-pb)*(1-(v-min)/span);
@@ -695,15 +721,16 @@ function equityLine(){
   const line=pts.join(" ");
   const area=`${xs[0]},${Y(min)} ${line} ${xs[xs.length-1]},${Y(min)}`;
   const zeroY=Y(0);
-  // sparse labels: first, last, max
-  const maxI=ys.indexOf(Math.max(...ys));
-  const labelIdx=new Set([0,data.length-1,maxI]);
   const dots=xs.map((x,i)=>{
     const y=Y(ys[i]);
-    const lab=labelIdx.has(i)?`<text x="${x}" y="${y-9}" text-anchor="middle" fill="rgba(255,255,255,.6)" font-size="11">${money(ys[i])}</text>`:"";
-    return `<circle cx="${x}" cy="${y}" r="${labelIdx.has(i)?3:2}" fill="#529bff"/>${lab}`;
+    const above=i%2===0;
+    let ly=above?y-9:y+16; ly=Math.max(12,Math.min(H-6,ly));
+    const anchor=i===0?"start":(i===n-1?"end":"middle");
+    const lx=i===0?x-3:(i===n-1?x+3:x);
+    const lab=`<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="rgba(255,255,255,.62)" font-size="10.5">${money(ys[i])}</text>`;
+    return `<circle cx="${x}" cy="${y}" r="2.6" fill="#529bff"/>${lab}`;
   }).join("");
-  return `<div class="linewrap"><svg class="line" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  return `<div class="linewrap"><svg class="line" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
     <defs><linearGradient id="eg" x1="0" x2="0" y1="0" y2="1">
       <stop offset="0" stop-color="#529bff" stop-opacity=".28"/>
       <stop offset="1" stop-color="#529bff" stop-opacity="0"/></linearGradient></defs>
@@ -728,11 +755,31 @@ function viewChart(){
       <div class="big num ${cls(s.byAcct[a.k])}">${money(s.byAcct[a.k])}</div>
       <div class="sm">${state.trades.filter(t=>t.accts[a.k]).length} trades</div>
     </div>`).join("")+`</div>`;
-  const stratData=Object.keys(STRATS).map(k=>({label:k.replace("Strategy ","")+"",value:s.byStrat[k],color:STRATS[k].hue}));
+  const stratData=Object.keys(STRATS).map(k=>({label:k.replace("Strategy ",""),value:s.byStrat[k],color:STRATS[k].hue}));
   const dayData=withEquity().map(d=>({label:parseISO(d.t.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}),value:totalPnl(d.t)}));
+  const S=(k,v,c="")=>`<div class="statcell"><div class="k">${k}</div><div class="val num ${c}">${v}</div></div>`;
+  const perf=`<div class="panel"><h3>◔ Performance</h3><div class="statgrid">
+    <div class="statcell"><div class="k">Account size</div><input class="capinput num" id="cap-input" type="number" inputmode="numeric" value="${s.cap}"></div>
+    ${S("Current balance",money(s.currentBalance))}
+    ${S("Net P&L",money(s.net),cls(s.net))}
+    ${S("Total return",fmtPct(s.totalReturn),cls(s.totalReturn))}
+    ${S("Trades",s.n)}
+    ${S("Win rate",s.winRate+"%")}
+    ${S("Expectancy",s.expectancyR?s.expectancyR.toFixed(2)+"R":"—",cls(s.expectancyR))}
+    ${S("Profit factor",s.profitFactor===Infinity?"∞":s.profitFactor.toFixed(2))}
+    ${S("Avg win",money(s.avgWin),"pos")}
+    ${S("Avg loss",s.avgLoss?money(-s.avgLoss):"—",s.avgLoss?"neg":"")}
+    ${S("Best trade",money(s.best),"pos")}
+    ${S("Worst trade",money(s.worst),s.worst<0?"neg":"")}
+    ${S("Max drawdown",s.maxDD.toFixed(1)+"%",s.maxDD>0?"neg":"")}
+    ${S("Plan adherence",s.rulesRate+"%")}
+    ${S("Wins",s.wins,"pos")}
+    ${S("Losses",s.losses,s.losses?"neg":"")}
+  </div></div>`;
   return `<div class="dash">
     ${rings}
     ${accts}
+    ${perf}
     <div class="two">
       <div class="panel"><h3>◔ Net P&L by strategy</h3>${vbars(stratData)}</div>
       <div class="panel"><h3>◔ Profit per day (all accounts)</h3>${hbars(dayData)}</div>
@@ -771,6 +818,8 @@ function bindViewEvents(){
     if(e.target.closest("[data-id]"))return;
     openModal(null, c.dataset.date);
   }));
+  const cap=$("#cap-input");
+  if(cap) cap.addEventListener("change",()=>{ state.settings.startingCapital=Number(cap.value)||0; persist(); render(); });
 }
 
 /* ================= modal / logging ================= */
@@ -935,7 +984,8 @@ $("#import-file").addEventListener("change",e=>{
 (async function(){
   idb=await openDB();
   const saved=await dbGet();
-  if(saved&&Array.isArray(saved.trades)){ state=Object.assign(state,saved); state.ui=saved.ui||state.ui; }
+  if(saved&&Array.isArray(saved.trades)){ state=Object.assign(state,saved); state.ui=saved.ui||state.ui;
+    state.settings=Object.assign({lastContracts:4,startingCapital:150000}, saved.settings||{}); }
   else{ state.trades=sample(); await dbPut(state); }
   renderTabs(); render();
 })();
