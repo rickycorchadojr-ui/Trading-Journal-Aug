@@ -132,24 +132,27 @@ tfoot .num{color:var(--text)}
 .nav button:hover{background:var(--hover-strong)}
 .today-btn{height:30px;padding:0 11px;border-radius:5px;background:var(--hover);font-size:13px}
 .today-btn:hover{background:var(--hover-strong)}
-.cal{border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.cal .wk{display:grid;grid-template-columns:repeat(7,1fr)}
-.cal .wd{padding:7px 10px;font-size:12px;color:var(--text-dim);border-bottom:1px solid var(--line);border-right:1px solid var(--line-soft)}
-.cal .wd:last-child{border-right:none}
-.cal .cell{min-height:96px;padding:6px 7px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
-  position:relative;cursor:pointer;transition:background .1s}
-.cal .cell:nth-child(7n){border-right:none}
-.cal .cell:hover{background:var(--hover)}
-.cal .cell.out{background:rgba(0,0,0,.15);cursor:default}
-.cal .cell.out:hover{background:rgba(0,0,0,.15)}
-.cal .dn{font-size:12.5px;color:var(--text-dim);position:absolute;top:5px;right:8px}
-.cal .ev{margin-top:20px;font-size:11.5px;line-height:1.35}
-.cal .ev .row1{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.cal .ev .tk{color:var(--text);font-size:11.5px}
-.cal .ev .pl{font-size:12px;margin-top:3px}
+.cal .wkhdr{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.cal .wd{padding:2px 8px;font-size:11px;color:var(--text-dim)}
+.cal .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .cell{min-height:92px;padding:8px 9px;border-radius:10px;position:relative;cursor:pointer;
+  background:var(--bg-elev);border:1px solid var(--line-soft);transition:border-color .1s}
+.cal .cell:hover{border-color:var(--line)}
+.cal .cell.out{background:transparent;border:none;cursor:default;min-height:0}
+.cal .cell.empty{background:rgba(255,255,255,.018);border-color:transparent}
+.cal .cell.empty:hover{border-color:var(--line-soft)}
+.cal .cell.green{background:rgba(45,170,90,.14);border-color:rgba(45,170,90,.34)}
+.cal .cell.red{background:rgba(235,87,87,.12);border-color:rgba(235,87,87,.32)}
+.cal .dn{font-size:12px;color:var(--text-dim);position:absolute;top:7px;left:9px}
+.cal .cell.green .dn,.cal .cell.red .dn{color:var(--text-mid)}
+.cal .daybody{margin-top:24px;text-align:center}
+.cal .daybody .amt{font-size:15px;font-weight:700}
+.cal .daybody .sub{font-size:10px;color:var(--text-faint);margin-top:2px}
 @media(max-width:720px){
-  .cal .cell{min-height:74px}
-  .cal .ev .tk{display:none}
+  .cal .cell{min-height:72px;padding:6px 7px}
+  .cal .daybody{margin-top:20px}
+  .cal .daybody .amt{font-size:13px}
+  .cal .daybody .sub{display:none}
 }
 
 /* ============ Gallery ============ */
@@ -319,9 +322,17 @@ textarea.inp{height:auto;min-height:58px;padding:9px 11px;resize:vertical;line-h
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>Backup</button>
     <button class="tbtn" id="btn-import" title="Restore from a backup file">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9m0 0l-4 4m4-4l4 4M4 7V5a2 2 0 012-2h12a2 2 0 012 2v2"/></svg>Restore</button>
+    <select class="tbtn" id="import-acct" title="Account to import into" style="padding-right:8px">
+      <option value="ts1">TopstepX #1</option>
+      <option value="ts2">TopstepX #2</option>
+      <option value="apex">Apex</option>
+    </select>
+    <button class="tbtn" id="btn-import-csv" title="Import a TopstepX trades CSV">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h11l5 5v11a0 0 0 010 0H4zM14 4v5h5M8 13h8M8 17h8"/></svg>Import CSV</button>
     <button class="tbtn primary" id="btn-new">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Log trade</button>
     <input type="file" id="import-file" accept="application/json" hidden>
+    <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
   </header>
   <div class="sub" id="subline"></div>
 
@@ -415,9 +426,9 @@ textarea.inp{height:auto;min-height:58px;padding:9px 11px;resize:vertical;line-h
 const MULT = 2;                       // MNQ: $2 per point per contract
 const HUE = {blue:"#529bff", green:"#4dd58a", red:"#ff6b6b", purple:"#b483e8", orange:"#e2975c", gold:"#e6c15b"};
 const ACCTS = [
-  {k:"ts1",  name:"TopstepX #1", color:HUE.blue,   cls:"blue"},
-  {k:"ts2",  name:"TopstepX #2", color:HUE.purple, cls:"purple"},
-  {k:"apex", name:"Apex",        color:HUE.orange, cls:"orange"},
+  {k:"ts1",  name:"TopstepX #1", color:HUE.blue,   cls:"blue",   rt:1.22},
+  {k:"ts2",  name:"TopstepX #2", color:HUE.purple, cls:"purple", rt:1.22},
+  {k:"apex", name:"Apex",        color:HUE.orange, cls:"orange", rt:1.04},
 ];
 const STRATS = {
   "Strategy #1":{cls:"blue", hue:HUE.blue},
@@ -447,13 +458,20 @@ function fmtDateLong(s){ const d=parseISO(s);
 function acctContracts(t,k){ const o=t.ov&&t.ov[k]; return (o!=null&&o!=="")?Number(o):Number(t.contracts||0); }
 function acctPnl(t,k){ return t.accts[k] ? Number(t.points||0)*acctContracts(t,k)*MULT : 0; }
 function totalPnl(t){ return ACCTS.reduce((s,a)=>s+acctPnl(t,a.k),0); }
+function acctComm(t,k){
+  if(!t.accts[k]) return 0;
+  if(t.imported) return (Number(t.fees)||0)+(Number(t.comm)||0); // real cost from the export (per trade)
+  return ((ACCTS.find(a=>a.k===k)||{}).rt||0) * acctContracts(t,k);  // round-turn × contracts
+}
+function tradeComm(t){ return ACCTS.reduce((s,a)=>s+acctComm(t,a.k),0); }
+function tradeNet(t){ return totalPnl(t)-tradeComm(t); }
 function sortedTrades(){
   return [...state.trades].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq));
 }
 function withEquity(){ let run=0; return sortedTrades().map(t=>{ run+=totalPnl(t); return {t,equity:run}; }); }
 
 /* ================= state + storage (IndexedDB, graceful) ================= */
-let state = {trades:[], ui:{tab:"list", calY:2026, calM:1}, settings:{lastContracts:4, startingCapital:150000}};
+let state = {trades:[], ui:{tab:"chart", calY:2026, calM:1}, settings:{lastContracts:4, startingCapital:150000}};
 let idb=null, memoryOnly=false, saveTimer=null;
 
 function openDB(){
@@ -510,12 +528,12 @@ function sample(){
 
 /* ================= tabs ================= */
 const TABS=[
+  {k:"chart",    label:"Dashboard",         icon:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'},
   {k:"list",     label:"List overview",     icon:'<path d="M4 6h16M4 12h16M4 18h16"/>'},
   {k:"wins",     label:"Wins vs Losses",    icon:'<rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/>'},
   {k:"strategy", label:"Strategy overview", icon:'<rect x="4" y="4" width="4.5" height="16" rx="1"/><rect x="10" y="4" width="4.5" height="16" rx="1"/><rect x="16" y="4" width="4.5" height="16" rx="1"/>'},
   {k:"calendar", label:"Trading Journal",   icon:'<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M9 3v4M15 3v4"/>'},
   {k:"gallery",  label:"Gallery",           icon:'<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M4 16l4-3 4 3 3-2 5 4"/>'},
-  {k:"chart",    label:"Dashboard",         icon:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'},
 ];
 function renderTabs(){
   $("#tabs").innerHTML=TABS.map(t=>`<button class="tab ${state.ui.tab===t.k?'active':''}" data-k="${t.k}">
@@ -610,20 +628,23 @@ function viewCalendar(){
     const dnum=i-first+1;
     if(dnum<1||dnum>days){ cells+=`<div class="cell out"></div>`; continue; }
     const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(dnum).padStart(2,"0")}`;
-    const evs=(byDate[ds]||[]).map(t=>{
-      const tp=totalPnl(t);
-      return `<div class="ev" data-id="${t.id}">
-        <div class="row1"><span class="tk">MNQ</span>${outcomePill(t.outcome)}</div>
-        <div class="pl num ${cls(tp)}">${signed(tp)} <span style="color:var(--text-faint);font-size:10px">${fmtPct(pctOf(tp))}</span></div></div>`;
-    }).join("");
-    cells+=`<div class="cell" data-date="${ds}"><span class="dn num">${dnum}</span>${evs}</div>`;
+    const dayTrades=byDate[ds]||[];
+    if(!dayTrades.length){ cells+=`<div class="cell empty" data-date="${ds}"><span class="dn num">${dnum}</span></div>`; continue; }
+    const net=dayTrades.reduce((s,t)=>s+totalPnl(t),0);
+    const k=net>=0?"green":"red", nt=dayTrades.length;
+    cells+=`<div class="cell ${k}" data-date="${ds}">
+      <span class="dn num">${dnum}</span>
+      <div class="daybody">
+        <div class="amt num ${cls(net)}">${signed(net)}</div>
+        <div class="sub num">${fmtPct(pctOf(net))} · ${nt} trade${nt>1?"s":""}</div>
+      </div></div>`;
   }
   return `<div class="cal-h">
       <div class="nav"><button data-nav="-1">‹</button><button data-nav="1">›</button></div>
       <div class="m">${monthName}</div>
       <button class="today-btn" data-nav="today">Today</button>
     </div>
-    <div class="cal"><div class="wk">${wd}</div><div class="wk">${cells}</div></div>`;
+    <div class="cal"><div class="wkhdr">${wd}</div><div class="grid">${cells}</div></div>`;
 }
 
 /* ================= VIEW: gallery ================= */
@@ -653,8 +674,9 @@ function stats(){
   const wins=ts.filter(t=>t.outcome==="WIN").length;
   const losses=ts.filter(t=>t.outcome==="LOSS").length;
   const rules=ts.filter(t=>t.rules).length;
-  const byAcct={ts1:0,ts2:0,apex:0}; let net=0;
-  ts.forEach(t=>{ ACCTS.forEach(a=>byAcct[a.k]+=acctPnl(t,a.k)); net+=totalPnl(t); });
+  const byAcct={ts1:0,ts2:0,apex:0}, byAcctNet={ts1:0,ts2:0,apex:0}; let gross=0, comm=0;
+  ts.forEach(t=>{ ACCTS.forEach(a=>{ byAcct[a.k]+=acctPnl(t,a.k); byAcctNet[a.k]+=acctPnl(t,a.k)-acctComm(t,a.k); }); gross+=totalPnl(t); comm+=tradeComm(t); });
+  const net=gross-comm;
   const byStrat={}; Object.keys(STRATS).forEach(s=>byStrat[s]=0);
   ts.forEach(t=>byStrat[t.strategy]+=totalPnl(t));
   const pnls=ts.map(totalPnl);
@@ -662,12 +684,12 @@ function stats(){
   const grossWin=winP.reduce((a,b)=>a+b,0), grossLoss=Math.abs(lossP.reduce((a,b)=>a+b,0));
   const avgWin=winP.length?grossWin/winP.length:0, avgLoss=lossP.length?grossLoss/lossP.length:0;
   const profitFactor=grossLoss>0?grossWin/grossLoss:(grossWin>0?Infinity:0);
-  const expectancyR=avgLoss>0?(net/(n||1))/avgLoss:0;
+  const expectancyR=avgLoss>0?(gross/(n||1))/avgLoss:0;
   const best=pnls.length?Math.max(...pnls):0, worst=pnls.length?Math.min(...pnls):0;
   const cap=Number(state.settings.startingCapital)||0;
   let peak=cap,maxDD=0;
   withEquity().forEach(d=>{ const bal=cap+d.equity; if(bal>peak)peak=bal; const dd=peak>0?(peak-bal)/peak*100:0; if(dd>maxDD)maxDD=dd; });
-  return {n,wins,losses,rules,net,byAcct,byStrat,grossWin,grossLoss,avgWin,avgLoss,profitFactor,expectancyR,best,worst,maxDD,cap,
+  return {n,wins,losses,rules,gross,comm,net,byAcct,byAcctNet,byStrat,grossWin,grossLoss,avgWin,avgLoss,profitFactor,expectancyR,best,worst,maxDD,cap,
     currentBalance:cap+net, totalReturn:cap>0?net/cap*100:0,
     winRate:n?Math.round(wins/n*100):0, lossRate:n?Math.round(losses/n*100):0, rulesRate:n?Math.round(rules/n*100):0};
 }
@@ -711,7 +733,7 @@ function hbars(data){ // [{label,value}]
 }
 function equityLine(){
   const data=withEquity(); if(data.length<1) return `<div class="empty">Log trades to build your equity curve.</div>`;
-  const W=760,H=250,pl=36,pr=48,pt=32,pb=42;
+  const W=760,H=230,pl=34,pr=46,pt=20,pb=24;
   const n=data.length;
   const xs=data.map((_,i)=>n===1?W/2:(pl+(W-pl-pr)*i/(n-1)));
   const ys=data.map(d=>d.equity);
@@ -723,12 +745,14 @@ function equityLine(){
   const zeroY=Y(0);
   const dots=xs.map((x,i)=>{
     const y=Y(ys[i]);
-    const above=i%2===0;
-    let ly=above?y-9:y+16; ly=Math.max(12,Math.min(H-6,ly));
-    const anchor=i===0?"start":(i===n-1?"end":"middle");
-    const lx=i===0?x-3:(i===n-1?x+3:x);
-    const lab=`<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="rgba(255,255,255,.62)" font-size="10.5">${money(ys[i])}</text>`;
-    return `<circle cx="${x}" cy="${y}" r="2.6" fill="#529bff"/>${lab}`;
+    let lab="";
+    if(i===0||i===n-1){
+      const anchor=i===0?"start":"end";
+      const lx=i===0?x-2:x+2;
+      const ly=Math.max(10,y-8);
+      lab=`<text x="${lx}" y="${ly}" text-anchor="${anchor}" fill="rgba(255,255,255,.5)" font-size="9">${money(ys[i])}</text>`;
+    }
+    return `<circle cx="${x}" cy="${y}" r="${i===n-1?2.8:1.8}" fill="#529bff"/>${lab}`;
   }).join("");
   return `<div class="linewrap"><svg class="line" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
     <defs><linearGradient id="eg" x1="0" x2="0" y1="0" y2="1">
@@ -761,6 +785,8 @@ function viewChart(){
   const perf=`<div class="panel"><h3>◔ Performance</h3><div class="statgrid">
     <div class="statcell"><div class="k">Account size</div><input class="capinput num" id="cap-input" type="number" inputmode="numeric" value="${s.cap}"></div>
     ${S("Current balance",money(s.currentBalance))}
+    ${S("Gross P&L",money(s.gross),cls(s.gross))}
+    ${S("Fees & comm",s.comm?money(-s.comm):"$0",s.comm?"neg":"")}
     ${S("Net P&L",money(s.net),cls(s.net))}
     ${S("Total return",fmtPct(s.totalReturn),cls(s.totalReturn))}
     ${S("Trades",s.n)}
@@ -973,10 +999,84 @@ $("#import-file").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f)return;
   const rd=new FileReader();
   rd.onload=()=>{ try{ const data=JSON.parse(rd.result);
-    if(data&&Array.isArray(data.trades)){ state=Object.assign(state,data); state.ui=state.ui||{tab:"list",calY:2026,calM:1};
+    if(data&&Array.isArray(data.trades)){ state=Object.assign(state,data); state.ui=state.ui||{tab:"chart",calY:2026,calM:1};
       persist(); renderTabs(); render(); toast("Backup restored"); }
     else toast("That file doesn't look like a journal backup");
   }catch(err){ toast("Couldn't read that file"); } };
+  rd.readAsText(f); e.target.value="";
+});
+
+/* ============ TopstepX CSV import ============ */
+function splitCSVLine(line){
+  const out=[]; let cur="", q=false;
+  for(let i=0;i<line.length;i++){ const ch=line[i];
+    if(q){ if(ch==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else { if(ch===','){out.push(cur);cur="";} else if(ch==='"'){q=true;} else cur+=ch; }
+  }
+  out.push(cur); return out;
+}
+function parseDT(s){ // "08/07/2026 08:44:59 -07:00"
+  const parts=(s||"").trim().split(/\s+/);
+  const dp=(parts[0]||"").split("/");
+  if(dp.length<3) return {date:iso(new Date()),time:""};
+  const [mm,dd,yyyy]=dp;
+  return {date:`${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`, time:(parts[1]||"").slice(0,5)};
+}
+function instrumentRoot(c){ return ((c||"").replace(/[FGHJKMNQUVXZ]\d+$/,"")||"MNQ"); }
+function fmtDur(s){ // "00:01:13.6800880" -> "1m 13s"
+  const m=(s||"").match(/(\d+):(\d+):(\d+)/); if(!m) return s||"";
+  const h=+m[1],mi=+m[2],se=+m[3];
+  return (h?h+"h ":"")+(mi?mi+"m ":"")+se+"s";
+}
+function parseTopstepCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2) return [];
+  const H=splitCSVLine(lines[0]).map(h=>h.trim().toLowerCase());
+  const col=n=>H.indexOf(n.toLowerCase());
+  const iP=col("PnL"), iEnter=col("EnteredAt"), iExit=col("ExitedAt"), iType=col("Type"),
+        iSize=col("Size"), iC=col("ContractName"), iFee=col("Fees"), iCom=col("Commissions"),
+        iEP=col("EntryPrice"), iXP=col("ExitPrice"), iDur=col("TradeDuration"), iId=col("Id");
+  if(iP<0||iEnter<0||iType<0) return null; // not a TopstepX trades export
+  const out=[];
+  for(let r=1;r<lines.length;r++){
+    const c=splitCSVLine(lines[r]); if(c.length<H.length) continue;
+    const pnl=parseFloat(c[iP]); if(isNaN(pnl)) continue;
+    const size=parseInt(c[iSize])||1;
+    const en=parseDT(c[iEnter]);
+    out.push({ id:(c[iId]||"").trim(), date:en.date, time:en.time,
+      dir:/short/i.test(c[iType])?"Short":"Long", size, pnl,
+      fees:parseFloat(c[iFee])||0, comm:parseFloat(c[iCom])||0,
+      entryPrice:parseFloat(c[iEP])||null, exitPrice:parseFloat(c[iXP])||null,
+      duration:fmtDur(c[iDur]), instrument:instrumentRoot(c[iC]) });
+  }
+  return out;
+}
+function acctName(k){ return (ACCTS.find(a=>a.k===k)||{}).name||k; }
+function mapImported(p, acct, i){
+  const accts={ts1:false,ts2:false,apex:false}; accts[acct]=true;
+  const pts = p.size ? p.pnl/(p.size*MULT) : 0; // MNQ-equivalent points so P&L reproduces exactly
+  return { id:"imp"+(p.id||(Date.now()+"_"+i)), seq:i, date:p.date, dir:p.dir,
+    outcome:p.pnl>=0?"WIN":"LOSS", strategy:"Strategy #1", contracts:p.size, points:pts,
+    accts, ov:{}, rules:true, notes:"Imported"+(p.time?" · "+p.time:""), images:[],
+    imported:true, time:p.time, duration:p.duration, fees:p.fees, comm:p.comm,
+    entryPrice:p.entryPrice, exitPrice:p.exitPrice, instrument:p.instrument, realPnl:p.pnl };
+}
+function handleCSVImport(text){
+  const acct=$("#import-acct").value||"ts1";
+  const parsed=parseTopstepCSV(text);
+  if(parsed===null){ toast("Doesn't look like a TopstepX trades export"); return; }
+  if(!parsed.length){ toast("No trades found in that file"); return; }
+  const replace=state.trades.length ? confirm(`Import ${parsed.length} trades into ${acctName(acct)}.\n\nOK = replace the trades you have now.\nCancel = add these to them.`) : false;
+  const mapped=parsed.map((p,i)=>mapImported(p,acct,i));
+  state.trades = replace ? mapped : state.trades.concat(mapped);
+  state.trades.forEach((t,i)=>t.seq=i);
+  persist(); render(); toast(`Imported ${parsed.length} trades → ${acctName(acct)}`);
+}
+$("#btn-import-csv").onclick=()=>$("#csv-file").click();
+$("#csv-file").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>handleCSVImport(rd.result);
   rd.readAsText(f); e.target.value="";
 });
 
