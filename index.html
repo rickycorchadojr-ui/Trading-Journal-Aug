@@ -180,13 +180,27 @@ tfoot .num{color:var(--text)}
 .ring-card{background:var(--bg-elev);border:1px solid var(--line-soft);border-radius:12px;padding:16px 10px;
   display:flex;flex-direction:column;align-items:center;gap:4px}
 .ring-card .cap{color:var(--text-dim);font-size:12.5px;margin-top:2px}
-.accts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-@media(max-width:560px){.accts{grid-template-columns:1fr}}
-.acard{background:var(--bg-elev);border:1px solid var(--line-soft);border-radius:12px;padding:15px 16px}
-.acard .lbl{display:flex;align-items:center;gap:8px;color:var(--text-dim);font-size:12.5px}
-.acard .dot{width:9px;height:9px;border-radius:50%}
-.acard .big{font-size:27px;font-weight:700;margin-top:8px;letter-spacing:-.5px}
-.acard .sm{color:var(--text-faint);font-size:12px;margin-top:2px}
+.accts{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:14px}
+.acctcard{background:var(--bg-elev);border:1px solid var(--line-soft);border-radius:12px;padding:14px 15px}
+.acctcard .ah{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.acctcard .an{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#fff;font-weight:600}
+.acctcard .an .dot{width:9px;height:9px;border-radius:50%}
+.acctcard .acsel{height:24px;background:var(--bg);border:1px solid var(--line);border-radius:5px;color:var(--text-dim);font-size:11px;font-family:var(--mono);padding:0 4px}
+.acctcard .anet{margin-left:auto;font-size:16px;font-weight:700}
+.acctcard .abal{font-size:12.5px;color:var(--text);margin-bottom:11px}
+.acctcard .arow{display:grid;grid-template-columns:60px 1fr auto;align-items:center;gap:9px;margin-bottom:8px;font-size:11px}
+.acctcard .al{color:var(--text-dim)}
+.acctcard .av{color:var(--text-mid);white-space:nowrap}
+.acctcard .abar{height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+.acctcard .afill{height:100%;border-radius:4px;transition:width .4s}
+.acctcard .afill.dd{background:var(--c-green)}
+.acctcard .afill.ddlow{background:var(--c-red)}
+.acctcard .afill.tg{background:var(--c-blue)}
+.acctcard .afill.done{background:var(--c-green)}
+.acctcard .acfg{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+.acctcard .acfg label{display:flex;flex-direction:column;gap:3px;font-size:9px;color:var(--text-faint);flex:1;min-width:62px;letter-spacing:.3px}
+.acctcard .ci{height:26px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:#fff;font-size:12px;font-family:var(--mono);padding:0 7px;width:100%}
+.acctcard .ci:focus,.acctcard .acsel:focus{outline:none;border-color:var(--accent)}
 .panel{background:var(--bg-elev);border:1px solid var(--line-soft);border-radius:12px;padding:16px 18px}
 .panel h3{margin:0 0 16px;font-size:13.5px;font-weight:400;color:var(--text-dim);display:flex;align-items:center;gap:8px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
@@ -248,6 +262,7 @@ svg.line{width:100%;height:auto;max-height:340px;display:block}
 .jtstrip input.ti.time{width:60px}
 .jtstrip input.ti.pnl{width:80px}
 .jtstrip input.ti.dur{width:60px}
+.jtstrip input.ti.qty{width:46px;text-align:center}
 .jtstrip select.ti{padding:0 4px}
 .jtstrip .imm{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:6px;
   background:var(--bg);border:1px solid var(--line);color:var(--text-dim);cursor:pointer;user-select:none}
@@ -467,6 +482,44 @@ const ACCTS = [
   {k:"ts2",  name:"TopstepX #2", color:HUE.purple, cls:"purple", rt:1.22},
   {k:"apex", name:"Apex",        color:HUE.orange, cls:"orange", rt:1.04},
 ];
+const DEFAULT_ACCOUNTS={
+  ts1:{phase:"Combine",   size:50000, maxDD:2000, target:3000},
+  ts2:{phase:"Combine",   size:50000, maxDD:2000, target:3000},
+  apex:{phase:"Evaluation",size:50000, maxDD:2500, target:3000}
+};
+function acctCfg(k){ return ((state.settings.accounts||{})[k])||{phase:"",size:0,maxDD:0,target:0}; }
+function accountStats(k){
+  const cfg=acctCfg(k);
+  const size=Number(cfg.size)||0, maxDD=Number(cfg.maxDD)||0, target=Number(cfg.target)||0;
+  let run=0,peak=0;
+  sortedTrades().forEach(t=>{ run+=acctPnl(t,k)-acctComm(t,k); if(run>peak)peak=run; });
+  const net=run, balance=size+net, peakBalance=size+Math.max(0,peak);
+  const ddFloor=peakBalance-maxDD, ddRemaining=balance-ddFloor;
+  const ddRemPct=maxDD>0?Math.min(100,Math.max(0,ddRemaining/maxDD*100)):0;
+  const targetPct=target>0?Math.max(0,net/target*100):0;
+  return {cfg,size,maxDD,target,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,targetPct,hit:target>0&&net>=target};
+}
+function accountCard(a){
+  const s=accountStats(a.k), cfg=s.cfg, tpct=Math.min(100,s.targetPct);
+  return `<div class="acctcard">
+    <div class="ah">
+      <span class="an"><span class="dot" style="background:${a.color}"></span>${a.name}</span>
+      <select class="acsel" data-acfg="${a.k}" data-fld="phase">${opt(["Combine","Evaluation","Funded","PA"],cfg.phase)}</select>
+      <span class="anet num ${cls(s.net)}">${money(s.net)}</span>
+    </div>
+    <div class="abal num">Balance ${money(s.balance)} <span style="color:var(--text-faint)">/ ${money(s.size)}</span></div>
+    <div class="arow"><span class="al">Drawdown</span>
+      <div class="abar"><div class="afill ${s.ddRemPct<30?'ddlow':'dd'}" style="width:${s.ddRemPct}%"></div></div>
+      <span class="av num">${money(s.ddRemaining)} left</span></div>
+    <div class="arow"><span class="al">Target</span>
+      <div class="abar"><div class="afill ${s.hit?'done':'tg'}" style="width:${tpct}%"></div></div>
+      <span class="av num">${Math.round(s.targetPct)}%${s.hit?" ✓":""}</span></div>
+    <div class="acfg">
+      <label>Size<input class="ci num" data-acfg="${a.k}" data-fld="size" inputmode="numeric" value="${s.size}"></label>
+      <label>Max DD<input class="ci num" data-acfg="${a.k}" data-fld="maxDD" inputmode="numeric" value="${s.maxDD}"></label>
+      <label>Target<input class="ci num" data-acfg="${a.k}" data-fld="target" inputmode="numeric" value="${s.target}"></label>
+    </div></div>`;
+}
 const STRATS = {
   "Strategy #1":{cls:"blue", hue:HUE.blue},
   "Strategy #2":{cls:"pink", hue:"#e491c6"},
@@ -768,6 +821,7 @@ function renderBlock(b){
       <input class="ti time" data-f="time" placeholder="9:34" value="${escapeHtml(t.time||"")}">
       <select class="ti wl" data-f="outcome">${opt(["WIN","LOSS"],t.outcome)}</select>
       <input class="ti pnl num" data-f="pnl" inputmode="decimal" placeholder="$ PnL" value="${t.pnl!=null?t.pnl:""}">
+      <input class="ti qty num" data-f="qty" inputmode="numeric" placeholder="×1" value="${t.contracts||1}" title="Contracts">
       <label class="imm" title="Went my way immediately"><input type="checkbox" data-f="immediate" ${t.immediate?"checked":""}> →</label>
       <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
       <input class="ti dur" data-f="duration" placeholder="dur" value="${escapeHtml(t.duration||"")}">
@@ -795,6 +849,7 @@ function editStrip(tid, field, el){
   else if(field==="immediate") t.immediate=el.checked;
   else if(field==="emoji") t.emoji=(el.value==="·"?"":el.value);
   else if(field==="acct"){ t.accts={ts1:false,ts2:false,apex:false}; t.accts[el.value]=true; }
+  else if(field==="qty"){ t.contracts=Math.max(1,parseInt(el.value)||1); if(t.pnl!=null) t.points=t.pnl/((t.contracts||1)*MULT); }
   else if(field==="pnl"){
     const v=parseFloat(el.value); const c=Number(t.contracts)||1;
     t.pnl=isNaN(v)?null:v; t.points=isNaN(v)?0:(v/(c*MULT));
@@ -810,6 +865,21 @@ function logTradeJournal(){
   const d=dayObj(jDate()); const t=newJournalTrade(jDate()); state.trades.push(t);
   d.blocks.push({id:uid(),type:"trade",tradeId:t.id});
   persist(); renderTabs(); render();
+}
+function openTradeInJournal(id){
+  const t=tradeById(id); if(!t) return;
+  state.ui.jDate=t.date; state.ui.tab="journal"; persist(); renderTabs(); render();
+  setTimeout(()=>{ const strip=document.querySelector(`.jtstrip[data-tid="${id}"]`);
+    if(strip){ strip.scrollIntoView({behavior:"smooth",block:"center"});
+      strip.style.transition="box-shadow .25s"; strip.style.boxShadow="0 0 0 2px var(--accent)";
+      setTimeout(()=>{ strip.style.boxShadow=""; },1300); } },70);
+}
+function syncTradeBlocks(){
+  Object.keys(state.days).forEach(date=>{ const d=state.days[date];
+    d.blocks=(d.blocks||[]).filter(b=> b.type!=="trade" || state.trades.some(t=>t.id===b.tradeId)); });
+  const have=new Set();
+  Object.values(state.days).forEach(d=>(d.blocks||[]).forEach(b=>{ if(b.type==="trade") have.add(b.tradeId); }));
+  sortedTrades().forEach(t=>{ if(!have.has(t.id)){ dayObj(t.date).blocks.push({id:uid(),type:"trade",tradeId:t.id}); have.add(t.id); } });
 }
 
 /* ================= stats ================= */
@@ -917,12 +987,7 @@ function viewChart(){
     ${ring(s.lossRate, HUE.red, s.lossRate+"%","Loss rate")}
     ${ring(s.rulesRate, HUE.blue, s.rulesRate+"%","Rules followed")}
   </div>`;
-  const accts=`<div class="accts">`+ACCTS.map(a=>`
-    <div class="acard">
-      <div class="lbl"><span class="dot" style="background:${a.color}"></span>${a.name}</div>
-      <div class="big num ${cls(s.byAcct[a.k])}">${money(s.byAcct[a.k])}</div>
-      <div class="sm">${state.trades.filter(t=>t.accts[a.k]).length} trades</div>
-    </div>`).join("")+`</div>`;
+  const accts=`<div class="accts">`+ACCTS.map(accountCard).join("")+`</div>`;
   const stratData=Object.keys(STRATS).map(k=>({label:k.replace("Strategy ",""),value:s.byStrat[k],color:STRATS[k].hue}));
   const dayData=withEquity().map(d=>({label:parseISO(d.t.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}),value:totalPnl(d.t)}));
   const S=(k,v,c="")=>`<div class="statcell"><div class="k">${k}</div><div class="val num ${c}">${v}</div></div>`;
@@ -976,7 +1041,7 @@ function render(){
 function bindViewEvents(){
   $$("#view [data-id]").forEach(el=>el.addEventListener("click",e=>{
     if(e.target.closest("[data-nav]"))return;
-    openModal(el.dataset.id);
+    openTradeInJournal(el.dataset.id);
   }));
   $$("#view [data-nav]").forEach(b=>b.onclick=()=>{
     const v=b.dataset.nav;
@@ -990,6 +1055,12 @@ function bindViewEvents(){
   }));
   const cap=$("#cap-input");
   if(cap) cap.addEventListener("change",()=>{ state.settings.startingCapital=Number(cap.value)||0; persist(); render(); });
+  $$("#view [data-acfg]").forEach(el=>el.addEventListener("change",()=>{
+    const k=el.dataset.acfg, f=el.dataset.fld;
+    state.settings.accounts=state.settings.accounts||{}; state.settings.accounts[k]=state.settings.accounts[k]||{};
+    state.settings.accounts[k][f]=(f==="phase")?el.value:(Number(el.value)||0);
+    persist(); render();
+  }));
   $$("#view .gal .shot").forEach(im=>im.addEventListener("click",()=>openLightbox(im.src)));
   // ---- Journal ----
   $$("#view [data-jnav]").forEach(b=>b.onclick=()=>{
@@ -1176,7 +1247,8 @@ $("#import-file").addEventListener("change",e=>{
   const rd=new FileReader();
   rd.onload=()=>{ try{ const data=JSON.parse(rd.result);
     if(data&&Array.isArray(data.trades)){ state=Object.assign(state,data); state.ui=state.ui||{tab:"chart",calY:2026,calM:1};
-      state.days=state.days||{}; migrateToDays(); state.ui.jDate=state.ui.jDate||iso(new Date());
+      state.settings=state.settings||{}; state.settings.accounts=Object.assign(JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)), state.settings.accounts||{});
+      state.days=state.days||{}; migrateToDays(); syncTradeBlocks(); state.ui.jDate=state.ui.jDate||iso(new Date());
       persist(); renderTabs(); render(); toast("Backup restored"); }
     else toast("That file doesn't look like a journal backup");
   }catch(err){ toast("Couldn't read that file"); } };
@@ -1247,6 +1319,7 @@ function handleCSVImport(text){
   const mapped=parsed.map((p,i)=>mapImported(p,acct,i));
   state.trades = replace ? mapped : state.trades.concat(mapped);
   state.trades.forEach((t,i)=>t.seq=i);
+  syncTradeBlocks();
   persist(); render(); toast(`Imported ${parsed.length} trades → ${acctName(acct)}`);
 }
 $("#btn-import-csv").onclick=()=>$("#csv-file").click();
@@ -1264,8 +1337,10 @@ $("#csv-file").addEventListener("change",e=>{
   if(saved&&Array.isArray(saved.trades)){ state=Object.assign(state,saved); state.ui=saved.ui||state.ui;
     state.settings=Object.assign({lastContracts:4,startingCapital:150000}, saved.settings||{}); }
   else{ state.trades=sample(); }
+  state.settings.accounts=Object.assign(JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)), state.settings.accounts||{});
   state.days=state.days||{};
   migrateToDays();
+  syncTradeBlocks();
   state.ui.jDate=state.ui.jDate||iso(new Date());
   await dbPut(state);
   renderTabs(); render();
