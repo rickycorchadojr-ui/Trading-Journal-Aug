@@ -224,6 +224,42 @@ svg.line{width:100%;height:auto;max-height:340px;display:block}
 .empty{color:var(--text-dim);font-size:14px;padding:60px 10px;text-align:center;border:1px dashed var(--line);border-radius:10px}
 .empty b{color:var(--text);display:block;margin-bottom:6px;font-size:15px}
 
+/* ============ Journal (day document) ============ */
+.jhead{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.jhead .d{font-size:18px;font-weight:700;color:#fff}
+.jhead .tot{margin-left:auto;font-size:12.5px;color:var(--text-dim)}
+.jdoc{max-width:760px}
+.jblock{position:relative;margin:0 0 14px}
+.jblock .bdel{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:6px;background:rgba(0,0,0,.55);
+  color:var(--text-dim);font-size:12px;display:grid;place-items:center;opacity:0;transition:opacity .12s;z-index:2}
+.jblock:hover .bdel{opacity:1}
+.jblock .bdel:hover{background:rgba(0,0,0,.8);color:#fff}
+.jtext{width:100%;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:15px;
+  line-height:1.6;resize:none;padding:2px 0;min-height:26px;overflow:hidden}
+.jtext:focus{outline:none}
+.jtext::placeholder{color:var(--text-faint)}
+.jimg{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--line-soft);cursor:zoom-in}
+.jtstrip{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px 9px;border-radius:9px;
+  background:var(--bg-elev);border:1px solid var(--line-soft);font-size:12.5px}
+.jtstrip .tnum{color:var(--text-faint);font-weight:700;min-width:26px;text-align:center}
+.jtstrip .ti{height:28px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:#fff;
+  font-family:var(--mono);font-size:12.5px;padding:0 7px;max-width:100%}
+.jtstrip .ti:focus{outline:none;border-color:var(--accent)}
+.jtstrip input.ti.time{width:60px}
+.jtstrip input.ti.pnl{width:80px}
+.jtstrip input.ti.dur{width:60px}
+.jtstrip select.ti{padding:0 4px}
+.jtstrip .imm{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:6px;
+  background:var(--bg);border:1px solid var(--line);color:var(--text-dim);cursor:pointer;user-select:none}
+.jtstrip .imm input{margin:0}
+.jtstrip .emo{font-size:14px;width:46px;text-align:center}
+.jtstrip .del{margin-left:auto;color:var(--t-red);background:transparent;border:none;font-size:14px;padding:0 6px;cursor:pointer}
+.jadd{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.jadd button{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:8px;
+  background:var(--hover);color:var(--text);font-size:13px}
+.jadd button:hover{background:var(--hover-strong)}
+.jadd button svg{width:14px;height:14px;opacity:.8}
+
 /* ============ Modal ============ */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);display:none;z-index:50;
   align-items:flex-start;justify-content:center;padding:34px 16px;overflow-y:auto}
@@ -333,6 +369,7 @@ textarea.inp{height:auto;min-height:58px;padding:9px 11px;resize:vertical;line-h
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Log trade</button>
     <input type="file" id="import-file" accept="application/json" hidden>
     <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+    <input type="file" id="j-img-input" accept="image/*" multiple hidden>
   </header>
   <div class="sub" id="subline"></div>
 
@@ -471,7 +508,7 @@ function sortedTrades(){
 function withEquity(){ let run=0; return sortedTrades().map(t=>{ run+=totalPnl(t); return {t,equity:run}; }); }
 
 /* ================= state + storage (IndexedDB, graceful) ================= */
-let state = {trades:[], ui:{tab:"chart", calY:2026, calM:1}, settings:{lastContracts:4, startingCapital:150000}};
+let state = {trades:[], days:{}, ui:{tab:"chart", calY:2026, calM:1, jDate:null}, settings:{lastContracts:4, startingCapital:150000}};
 let idb=null, memoryOnly=false, saveTimer=null;
 
 function openDB(){
@@ -529,10 +566,11 @@ function sample(){
 /* ================= tabs ================= */
 const TABS=[
   {k:"chart",    label:"Dashboard",         icon:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'},
+  {k:"journal",  label:"Journal",           icon:'<path d="M5 4h11l4 4v12H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>'},
   {k:"list",     label:"List overview",     icon:'<path d="M4 6h16M4 12h16M4 18h16"/>'},
   {k:"wins",     label:"Wins vs Losses",    icon:'<rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/>'},
   {k:"strategy", label:"Strategy overview", icon:'<rect x="4" y="4" width="4.5" height="16" rx="1"/><rect x="10" y="4" width="4.5" height="16" rx="1"/><rect x="16" y="4" width="4.5" height="16" rx="1"/>'},
-  {k:"calendar", label:"Trading Journal",   icon:'<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M9 3v4M15 3v4"/>'},
+  {k:"calendar", label:"Calendar",          icon:'<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M9 3v4M15 3v4"/>'},
   {k:"gallery",  label:"Gallery",           icon:'<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M4 16l4-3 4 3 3-2 5 4"/>'},
 ];
 function renderTabs(){
@@ -649,23 +687,129 @@ function viewCalendar(){
 
 /* ================= VIEW: gallery ================= */
 function viewGallery(){
-  if(!state.trades.length) return emptyState();
-  const order=["Strategy #1","Strategy #2","Strategy #3"];
-  return order.map(s=>{
-    const items=sortedTrades().filter(t=>t.strategy===s);
-    if(!items.length) return "";
-    const cards=items.map(t=>{
-      const cover=t.images[0], tp=totalPnl(t);
-      const media=cover?`<img class="shot" src="${cover}" alt="">`:`<div class="ph">no screenshot</div>`;
-      const badge=t.images.length>1?`<span class="cnt">${t.images.length}</span>`:"";
-      return `<div class="gcard" data-id="${t.id}">
-        ${media}${badge}
-        <div class="bd">
-          <div class="r"><span class="nm">MNQ</span>${outcomePill(t.outcome)}<span class="num ${cls(tp)}" style="margin-left:auto;font-size:12px;font-weight:600">${money(tp)}</span></div>
-          <div class="r"><span style="color:var(--text-dim);font-size:11.5px">${fmtDateLong(t.date)}</span><span class="num" style="margin-left:auto;color:var(--text-faint);font-size:11px">${fmtPct(pctOf(tp))}</span></div>
-        </div></div>`;}).join("");
-    return `<div class="gal-grp"><h4>${stratPill(s)} <span style="color:var(--text-faint)">${items.length}</span></h4><div class="gal">${cards}</div></div>`;
-  }).join("");
+  const imgs=allImageBlocks();
+  if(!imgs.length) return `<div class="empty"><b>No screenshots yet.</b>Add them in the Journal — they collect here automatically.</div>`;
+  const cards=imgs.map(im=>`<div class="gcard"><img class="shot" src="${im.src}" alt="" data-golx="${im.id}">
+    <div class="bd"><div class="r"><span style="color:var(--text-dim);font-size:11.5px">${fmtDateLong(im.date)}</span></div></div></div>`).join("");
+  return `<div class="gal">${cards}</div>`;
+}
+
+/* ================= Journal (day document) ================= */
+function uid(){ return "b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function dayObj(date){ if(!state.days[date]) state.days[date]={blocks:[]}; return state.days[date]; }
+function jDate(){ return state.ui.jDate || iso(new Date()); }
+function tradeById(id){ return state.trades.find(t=>t.id===id); }
+function tradeNumber(id){ const s=sortedTrades(); const i=s.findIndex(t=>t.id===id); return i<0?"":"#"+(i+1); }
+const EMOJIS=["🎯","😎","😐","😤","😨","🤢","🤞","😴","🧊","🔥"];
+function escapeHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function opt(arr,sel){ return arr.map(o=>`<option ${o===sel?"selected":""}>${o}</option>`).join(""); }
+function findBlock(bid){ const d=state.days[jDate()]; return d&&(d.blocks||[]).find(b=>b.id===bid); }
+function autoGrow(ta){ ta.style.height="auto"; ta.style.height=(ta.scrollHeight)+"px"; }
+
+function migrateToDays(){
+  if(state.days && Object.keys(state.days).length) return;
+  state.days={};
+  sortedTrades().forEach(t=>{
+    const d=dayObj(t.date);
+    d.blocks.push({id:uid(),type:"trade",tradeId:t.id});
+    (t.images||[]).forEach(src=>d.blocks.push({id:uid(),type:"image",src}));
+    t.images=[];
+  });
+}
+function allImageBlocks(){
+  const out=[];
+  Object.keys(state.days).sort().reverse().forEach(date=>{
+    (state.days[date].blocks||[]).forEach(b=>{ if(b.type==="image") out.push({date,id:b.id,src:b.src}); });
+  });
+  return out;
+}
+function newJournalTrade(date){
+  return { id:"t"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), seq:state.trades.length,
+    date, dir:"Long", outcome:"WIN", strategy:"Strategy #1", contracts:1, points:0,
+    accts:{ts1:true,ts2:false,apex:false}, ov:{}, rules:true, notes:"",
+    pnl:null, time:"", duration:"", immediate:false, emoji:"", images:[] };
+}
+
+function viewJournal(){
+  const date=jDate();
+  const d=state.days[date]||{blocks:[]};
+  const long=parseISO(date).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+  const dayTrades=sortedTrades().filter(t=>t.date===date);
+  const net=dayTrades.reduce((s,t)=>s+tradeNet(t),0);
+  const blocks=(d.blocks||[]).map(renderBlock).join("");
+  const empty=(d.blocks||[]).length? "" : `<div style="color:var(--text-faint);font-size:14px;padding:8px 0">Empty day — add a screenshot, a note, or a trade below.</div>`;
+  return `<div class="jhead">
+      <div class="nav"><button data-jnav="-1">‹</button><button data-jnav="1">›</button></div>
+      <div class="d">${long}</div>
+      <button class="today-btn" data-jnav="today">Today</button>
+      <span class="tot num ${dayTrades.length?cls(net):''}">${dayTrades.length? dayTrades.length+" trade"+(dayTrades.length>1?"s":"")+" · "+signed(net)+" net" : "no trades yet"}</span>
+    </div>
+    <div class="jdoc">${empty}${blocks}
+      <div class="jadd">
+        <button data-jadd="image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M3 16l5-4 4 3 3-2 6 5"/></svg>Screenshot</button>
+        <button data-jadd="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h11M4 18h16"/></svg>Note</button>
+        <button data-jadd="trade"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18l6-6 4 4 6-8"/></svg>Trade</button>
+      </div>
+    </div>`;
+}
+function renderBlock(b){
+  if(b.type==="text"){
+    return `<div class="jblock" data-bid="${b.id}"><button class="bdel" data-bdel="${b.id}">✕</button>
+      <textarea class="jtext" data-btext="${b.id}" placeholder="Write…" rows="1">${escapeHtml(b.text||"")}</textarea></div>`;
+  }
+  if(b.type==="image"){
+    return `<div class="jblock" data-bid="${b.id}"><button class="bdel" data-bdel="${b.id}">✕</button>
+      <img class="jimg" src="${b.src}" alt="" data-bimg="${b.id}"></div>`;
+  }
+  if(b.type==="trade"){
+    const t=tradeById(b.tradeId); if(!t) return "";
+    return `<div class="jblock" data-bid="${b.id}"><div class="jtstrip" data-tid="${t.id}">
+      <span class="tnum">${tradeNumber(t.id)}</span>
+      <input class="ti time" data-f="time" placeholder="9:34" value="${escapeHtml(t.time||"")}">
+      <select class="ti wl" data-f="outcome">${opt(["WIN","LOSS"],t.outcome)}</select>
+      <input class="ti pnl num" data-f="pnl" inputmode="decimal" placeholder="$ PnL" value="${t.pnl!=null?t.pnl:""}">
+      <label class="imm" title="Went my way immediately"><input type="checkbox" data-f="immediate" ${t.immediate?"checked":""}> →</label>
+      <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
+      <input class="ti dur" data-f="duration" placeholder="dur" value="${escapeHtml(t.duration||"")}">
+      <select class="ti acct" data-f="acct">${ACCTS.map(a=>`<option value="${a.k}" ${t.accts[a.k]?"selected":""}>${a.name.replace("TopstepX","TS")}</option>`).join("")}</select>
+      <select class="ti emo" data-f="emoji">${["",...EMOJIS].map(e=>`<option ${t.emoji===e?"selected":""}>${e||"·"}</option>`).join("")}</select>
+      <button class="del" data-tdel="${t.id}" data-tbid="${b.id}">🗑</button>
+    </div></div>`;
+  }
+  return "";
+}
+function jAdd(kind){
+  const d=dayObj(jDate());
+  if(kind==="text"){ const b={id:uid(),type:"text",text:""}; d.blocks.push(b); persist(); render();
+    setTimeout(()=>{ const ta=document.querySelector(`[data-btext="${b.id}"]`); if(ta)ta.focus(); },0); return; }
+  if(kind==="image"){ $("#j-img-input").click(); return; }
+  if(kind==="trade"){ const t=newJournalTrade(jDate()); state.trades.push(t);
+    d.blocks.push({id:uid(),type:"trade",tradeId:t.id}); persist(); render(); }
+}
+function editStrip(tid, field, el){
+  const t=tradeById(tid); if(!t) return;
+  if(field==="time") t.time=el.value;
+  else if(field==="duration") t.duration=el.value;
+  else if(field==="outcome") t.outcome=el.value;
+  else if(field==="dir") t.dir=el.value;
+  else if(field==="immediate") t.immediate=el.checked;
+  else if(field==="emoji") t.emoji=(el.value==="·"?"":el.value);
+  else if(field==="acct"){ t.accts={ts1:false,ts2:false,apex:false}; t.accts[el.value]=true; }
+  else if(field==="pnl"){
+    const v=parseFloat(el.value); const c=Number(t.contracts)||1;
+    t.pnl=isNaN(v)?null:v; t.points=isNaN(v)?0:(v/(c*MULT));
+    if(!isNaN(v)&&v!==0){ t.outcome=v>0?"WIN":"LOSS"; const wl=el.closest(".jtstrip").querySelector('[data-f="outcome"]'); if(wl)wl.value=t.outcome; }
+  }
+  persist(); // no re-render: keeps focus while editing
+}
+function jDelBlock(bid){ const d=state.days[jDate()]; if(!d)return; d.blocks=(d.blocks||[]).filter(b=>b.id!==bid); persist(); render(); }
+function jDelTrade(tid,bid){ state.trades=state.trades.filter(t=>t.id!==tid);
+  const d=state.days[jDate()]; if(d) d.blocks=(d.blocks||[]).filter(b=>b.id!==bid); persist(); render(); }
+function logTradeJournal(){
+  state.ui.jDate=iso(new Date()); state.ui.tab="journal";
+  const d=dayObj(jDate()); const t=newJournalTrade(jDate()); state.trades.push(t);
+  d.blocks.push({id:uid(),type:"trade",tradeId:t.id});
+  persist(); renderTabs(); render();
 }
 
 /* ================= stats ================= */
@@ -825,7 +969,7 @@ function render(){
   $("#subline").textContent = s.n
     ? `${s.n} trades · net ${money(s.net)} · ${s.winRate}% win rate · ${s.rulesRate}% rules followed`
     : `MNQ · 3 funded accounts (TopstepX #1, TopstepX #2, Apex)`;
-  const map={list:viewList,wins:viewWins,strategy:viewStrategy,calendar:viewCalendar,gallery:viewGallery,chart:viewChart};
+  const map={chart:viewChart,journal:viewJournal,list:viewList,wins:viewWins,strategy:viewStrategy,calendar:viewCalendar,gallery:viewGallery};
   $("#view").innerHTML=(map[state.ui.tab]||viewList)();
   bindViewEvents();
 }
@@ -842,10 +986,33 @@ function bindViewEvents(){
   });
   $$("#view .cell[data-date]").forEach(c=>c.addEventListener("click",e=>{
     if(e.target.closest("[data-id]"))return;
-    openModal(null, c.dataset.date);
+    state.ui.jDate=c.dataset.date; state.ui.tab="journal"; persist(); renderTabs(); render();
   }));
   const cap=$("#cap-input");
   if(cap) cap.addEventListener("change",()=>{ state.settings.startingCapital=Number(cap.value)||0; persist(); render(); });
+  $$("#view .gal .shot").forEach(im=>im.addEventListener("click",()=>openLightbox(im.src)));
+  // ---- Journal ----
+  $$("#view [data-jnav]").forEach(b=>b.onclick=()=>{
+    const v=b.dataset.jnav;
+    if(v==="today") state.ui.jDate=iso(new Date());
+    else{ const dt=parseISO(jDate()); dt.setDate(dt.getDate()+Number(v)); state.ui.jDate=iso(dt); }
+    persist(); render();
+  });
+  $$("#view [data-jadd]").forEach(b=>b.onclick=()=>jAdd(b.dataset.jadd));
+  $$("#view [data-bdel]").forEach(b=>b.onclick=()=>jDelBlock(b.dataset.bdel));
+  $$("#view [data-bimg]").forEach(im=>im.addEventListener("click",()=>openLightbox(im.src)));
+  $$("#view [data-btext]").forEach(ta=>{ autoGrow(ta);
+    ta.addEventListener("input",()=>{ const b=findBlock(ta.dataset.btext); if(b)b.text=ta.value; autoGrow(ta); persist(); });
+  });
+  $$("#view .jtstrip").forEach(strip=>{
+    const tid=strip.dataset.tid;
+    strip.querySelectorAll("[data-f]").forEach(el=>{
+      const ev=(el.type==="checkbox"||el.tagName==="SELECT")?"change":"input";
+      el.addEventListener(ev,()=>editStrip(tid,el.dataset.f,el));
+    });
+    const del=strip.querySelector("[data-tdel]");
+    if(del) del.addEventListener("click",()=>jDelTrade(del.dataset.tdel,del.dataset.tbid));
+  });
 }
 
 /* ================= modal / logging ================= */
@@ -986,8 +1153,17 @@ document.addEventListener("paste",e=>{ if(!$("#scrim").classList.contains("on"))
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); $("#lightbox").classList.remove("on"); } });
 
 /* ================= header actions ================= */
-$("#btn-new").onclick=()=>openModal(null);
-$("#fab").onclick=()=>openModal(null);
+$("#btn-new").onclick=()=>logTradeJournal();
+$("#fab").onclick=()=>logTradeJournal();
+$("#j-img-input").addEventListener("change",e=>{
+  const files=[...e.target.files].filter(f=>f.type.startsWith("image/")); e.target.value="";
+  if(!files.length) return;
+  const d=dayObj(jDate()); let pending=files.length;
+  files.forEach(f=>{ const rd=new FileReader();
+    rd.onload=()=>downscale(rd.result,url=>{ d.blocks.push({id:uid(),type:"image",src:url}); if(--pending===0){ persist(); render(); } });
+    rd.readAsDataURL(f);
+  });
+});
 $("#btn-export").onclick=()=>{
   const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
@@ -1000,6 +1176,7 @@ $("#import-file").addEventListener("change",e=>{
   const rd=new FileReader();
   rd.onload=()=>{ try{ const data=JSON.parse(rd.result);
     if(data&&Array.isArray(data.trades)){ state=Object.assign(state,data); state.ui=state.ui||{tab:"chart",calY:2026,calM:1};
+      state.days=state.days||{}; migrateToDays(); state.ui.jDate=state.ui.jDate||iso(new Date());
       persist(); renderTabs(); render(); toast("Backup restored"); }
     else toast("That file doesn't look like a journal backup");
   }catch(err){ toast("Couldn't read that file"); } };
@@ -1086,7 +1263,11 @@ $("#csv-file").addEventListener("change",e=>{
   const saved=await dbGet();
   if(saved&&Array.isArray(saved.trades)){ state=Object.assign(state,saved); state.ui=saved.ui||state.ui;
     state.settings=Object.assign({lastContracts:4,startingCapital:150000}, saved.settings||{}); }
-  else{ state.trades=sample(); await dbPut(state); }
+  else{ state.trades=sample(); }
+  state.days=state.days||{};
+  migrateToDays();
+  state.ui.jDate=state.ui.jDate||iso(new Date());
+  await dbPut(state);
   renderTabs(); render();
 })();
 </script>
