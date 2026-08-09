@@ -68,6 +68,12 @@ header.top{display:flex;align-items:center;gap:14px;padding:22px 0 6px;flex-wrap
 .tbtn.primary{background:var(--accent);color:#fff;font-weight:600}
 .tbtn.primary:hover{background:var(--accent-hover)}
 .sub{color:var(--text-dim);font-size:12.5px;padding:2px 0 14px}
+.filterbar{display:flex;align-items:center;gap:8px;padding:12px 0 2px}
+.filterbar .flab{color:var(--text-dim);font-size:12px;margin-right:2px}
+.filterbar select{height:32px;background:var(--bg-elev);border:1px solid var(--line);border-radius:7px;color:var(--text);
+  font-family:var(--mono);font-size:13px;padding:0 10px;cursor:pointer}
+.filterbar select:focus{outline:none;border-color:var(--accent)}
+.filterbar select:hover{background:#242424}
 
 /* tabs */
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line-soft);overflow-x:auto;scrollbar-width:none;margin-bottom:4px}
@@ -373,22 +379,15 @@ textarea.inp{height:auto;min-height:58px;padding:9px 11px;resize:vertical;line-h
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>Backup</button>
     <button class="tbtn" id="btn-import" title="Restore from a backup file">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9m0 0l-4 4m4-4l4 4M4 7V5a2 2 0 012-2h12a2 2 0 012 2v2"/></svg>Restore</button>
-    <select class="tbtn" id="import-acct" title="Account to import into" style="padding-right:8px">
-      <option value="ts1">TopstepX #1</option>
-      <option value="ts2">TopstepX #2</option>
-      <option value="apex">Apex</option>
-    </select>
-    <button class="tbtn" id="btn-import-csv" title="Import a TopstepX trades CSV">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h11l5 5v11a0 0 0 010 0H4zM14 4v5h5M8 13h8M8 17h8"/></svg>Import CSV</button>
     <button class="tbtn primary" id="btn-new">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Log trade</button>
     <input type="file" id="import-file" accept="application/json" hidden>
-    <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
     <input type="file" id="j-img-input" accept="image/*" multiple hidden>
   </header>
   <div class="sub" id="subline"></div>
 
   <nav class="tabs" id="tabs"></nav>
+  <div class="filterbar" id="filterbar"></div>
   <main class="view" id="view"></main>
 </div>
 
@@ -558,10 +557,28 @@ function tradeNet(t){ return totalPnl(t)-tradeComm(t); }
 function sortedTrades(){
   return [...state.trades].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq));
 }
-function withEquity(){ let run=0; return sortedTrades().map(t=>{ run+=totalPnl(t); return {t,equity:run}; }); }
+function curAcct(){ return (state.ui&&state.ui.fAcct)||"all"; }
+function curRange(){ return (state.ui&&state.ui.fRange)||"all"; }
+function inRange(dateStr){
+  const r=curRange(); if(r==="all") return true;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=parseISO(dateStr);
+  if(r==="week"){ const ws=new Date(today); ws.setDate(today.getDate()-today.getDay()); return d>=ws; }
+  if(r==="month"){ return d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth(); }
+  if(r==="30d"){ const s=new Date(today); s.setDate(today.getDate()-29); return d>=s; }
+  return true;
+}
+function visibleTrades(){
+  const a=curAcct();
+  return sortedTrades().filter(t=> (a==="all"||t.accts[a]) && inRange(t.date));
+}
+function vPnl(t){ const a=curAcct(); return a==="all"?totalPnl(t):acctPnl(t,a); }
+function vComm(t){ const a=curAcct(); return a==="all"?tradeComm(t):acctComm(t,a); }
+function vNet(t){ return vPnl(t)-vComm(t); }
+function withEquity(){ let run=0; return visibleTrades().map(t=>{ run+=vPnl(t); return {t,equity:run}; }); }
 
 /* ================= state + storage (IndexedDB, graceful) ================= */
-let state = {trades:[], days:{}, ui:{tab:"chart", calY:2026, calM:1, jDate:null}, settings:{lastContracts:4, startingCapital:150000}};
+let state = {trades:[], days:{}, ui:{tab:"chart", calY:2026, calM:1, jDate:null, fAcct:"all", fRange:"all"}, settings:{lastContracts:4, startingCapital:150000}};
 let idb=null, memoryOnly=false, saveTimer=null;
 
 function openDB(){
@@ -639,8 +656,8 @@ function dirPill(d){ return `<span class="pill ${d==='Long'?'blue':'orange'}">${
 
 /* ================= VIEW: list ================= */
 function viewList(){
-  const rows=sortedTrades();
-  if(!rows.length) return emptyState();
+  const rows=visibleTrades();
+  if(!rows.length) return state.trades.length?filterEmpty():emptyState();
   const head=`<tr>
     <th><span class="hd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Pair</span></th>
     <th><span class="hd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg>Outcome</span></th>
@@ -652,7 +669,7 @@ function viewList(){
     <th style="text-align:right">Total P&L</th>
     <th style="text-align:center">Rules</th></tr>`;
   const body=rows.map(t=>{
-    const tp=totalPnl(t), imgN=t.images.length;
+    const tp=vPnl(t), imgN=t.images.length;
     return `<tr data-id="${t.id}">
       <td><span class="pair">${imgN?`<svg class="clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5V7a4 4 0 00-8 0v9a2 2 0 004 0V8"/></svg>`:''}MNQ</span></td>
       <td>${outcomePill(t.outcome)}</td>
@@ -681,13 +698,13 @@ function viewList(){
 /* ================= VIEW: boards ================= */
 function board(groups){
   return `<div class="board">`+groups.map(g=>{
-    const sum=g.items.reduce((s,t)=>s+totalPnl(t),0);
+    const sum=g.items.reduce((s,t)=>s+vPnl(t),0);
     const cards=g.items.map(t=>{
       const cover=t.images[0];
       return `<div class="card" data-id="${t.id}">
         ${cover?`<img class="cover" src="${cover}" alt="">`:''}
         <div class="r"><span class="name">MNQ</span>${outcomePill(t.outcome)}${dirPill(t.dir)}</div>
-        <div class="r"><span class="meta">${fmtDateLong(t.date)}</span><span class="meta num ${cls(totalPnl(t))}" style="margin-left:auto;font-weight:600">${money(totalPnl(t))} <span style="color:var(--text-faint);font-weight:400">${fmtPct(pctOf(totalPnl(t)))}</span></span></div>
+        <div class="r"><span class="meta">${fmtDateLong(t.date)}</span><span class="meta num ${cls(vPnl(t))}" style="margin-left:auto;font-weight:600">${money(vPnl(t))} <span style="color:var(--text-faint);font-weight:400">${fmtPct(pctOf(vPnl(t)))}</span></span></div>
       </div>`;}).join("")||`<div class="meta" style="color:var(--text-faint);padding:6px 2px">No trades</div>`;
     return `<div class="bcol">
       <div class="bcol-h">${g.head}<span class="count">${g.items.length}</span><span class="sum num ${cls(sum)}">${money(sum)}</span></div>
@@ -696,13 +713,13 @@ function board(groups){
 }
 function viewWins(){
   if(!state.trades.length) return emptyState();
-  const g=o=>({head:outcomePill(o),items:sortedTrades().filter(t=>t.outcome===o)});
+  const g=o=>({head:outcomePill(o),items:visibleTrades().filter(t=>t.outcome===o)});
   return board([g("WIN"),g("LOSS")]);
 }
 function viewStrategy(){
   if(!state.trades.length) return emptyState();
-  const g=s=>({head:stratPill(s),items:sortedTrades().filter(t=>t.strategy===s)});
-  return board([g("Strategy #1"),g("Strategy #2"),g("Strategy #3")]);
+  const g=s=>({head:stratPill(s),items:visibleTrades().filter(t=>t.strategy===s)});
+  return board(Object.keys(STRATS).map(g));
 }
 
 /* ================= VIEW: calendar ================= */
@@ -711,7 +728,7 @@ function viewCalendar(){
   const monthName=new Date(y,m,1).toLocaleDateString("en-US",{month:"long",year:"numeric"});
   const first=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
-  const byDate={}; state.trades.forEach(t=>{ (byDate[t.date]=byDate[t.date]||[]).push(t); });
+  const byDate={}; visibleTrades().forEach(t=>{ (byDate[t.date]=byDate[t.date]||[]).push(t); });
   const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="wd">${d}</div>`).join("");
   let cells="";
   const total=Math.ceil((first+days)/7)*7;
@@ -721,7 +738,7 @@ function viewCalendar(){
     const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(dnum).padStart(2,"0")}`;
     const dayTrades=byDate[ds]||[];
     if(!dayTrades.length){ cells+=`<div class="cell empty" data-date="${ds}"><span class="dn num">${dnum}</span></div>`; continue; }
-    const net=dayTrades.reduce((s,t)=>s+totalPnl(t),0);
+    const net=dayTrades.reduce((s,t)=>s+vPnl(t),0);
     const k=net>=0?"green":"red", nt=dayTrades.length;
     cells+=`<div class="cell ${k}" data-date="${ds}">
       <span class="dn num">${dnum}</span>
@@ -825,6 +842,7 @@ function renderBlock(b){
       <label class="imm" title="Went my way immediately"><input type="checkbox" data-f="immediate" ${t.immediate?"checked":""}> →</label>
       <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
       <input class="ti dur" data-f="duration" placeholder="dur" value="${escapeHtml(t.duration||"")}">
+      <select class="ti strat" data-f="strategy">${Object.keys(STRATS).map(sName=>`<option value="${sName}" ${t.strategy===sName?"selected":""}>${sName.replace("Strategy ","")}</option>`).join("")}</select>
       <select class="ti acct" data-f="acct">${ACCTS.map(a=>`<option value="${a.k}" ${t.accts[a.k]?"selected":""}>${a.name.replace("TopstepX","TS")}</option>`).join("")}</select>
       <select class="ti emo" data-f="emoji">${["",...EMOJIS].map(e=>`<option ${t.emoji===e?"selected":""}>${e||"·"}</option>`).join("")}</select>
       <button class="del" data-tdel="${t.id}" data-tbid="${b.id}">🗑</button>
@@ -849,6 +867,7 @@ function editStrip(tid, field, el){
   else if(field==="immediate") t.immediate=el.checked;
   else if(field==="emoji") t.emoji=(el.value==="·"?"":el.value);
   else if(field==="acct"){ t.accts={ts1:false,ts2:false,apex:false}; t.accts[el.value]=true; }
+  else if(field==="strategy"){ t.strategy=el.value; }
   else if(field==="qty"){ t.contracts=Math.max(1,parseInt(el.value)||1); if(t.pnl!=null) t.points=t.pnl/((t.contracts||1)*MULT); }
   else if(field==="pnl"){
     const v=parseFloat(el.value); const c=Number(t.contracts)||1;
@@ -884,16 +903,16 @@ function syncTradeBlocks(){
 
 /* ================= stats ================= */
 function stats(){
-  const ts=state.trades, n=ts.length;
+  const ts=visibleTrades(), n=ts.length;
   const wins=ts.filter(t=>t.outcome==="WIN").length;
   const losses=ts.filter(t=>t.outcome==="LOSS").length;
   const rules=ts.filter(t=>t.rules).length;
   const byAcct={ts1:0,ts2:0,apex:0}, byAcctNet={ts1:0,ts2:0,apex:0}; let gross=0, comm=0;
-  ts.forEach(t=>{ ACCTS.forEach(a=>{ byAcct[a.k]+=acctPnl(t,a.k); byAcctNet[a.k]+=acctPnl(t,a.k)-acctComm(t,a.k); }); gross+=totalPnl(t); comm+=tradeComm(t); });
+  ts.forEach(t=>{ ACCTS.forEach(a=>{ byAcct[a.k]+=acctPnl(t,a.k); byAcctNet[a.k]+=acctPnl(t,a.k)-acctComm(t,a.k); }); gross+=vPnl(t); comm+=vComm(t); });
   const net=gross-comm;
   const byStrat={}; Object.keys(STRATS).forEach(s=>byStrat[s]=0);
-  ts.forEach(t=>byStrat[t.strategy]+=totalPnl(t));
-  const pnls=ts.map(totalPnl);
+  ts.forEach(t=>{ if(byStrat[t.strategy]==null)byStrat[t.strategy]=0; byStrat[t.strategy]+=vPnl(t); });
+  const pnls=ts.map(vPnl);
   const winP=pnls.filter(v=>v>0), lossP=pnls.filter(v=>v<0);
   const grossWin=winP.reduce((a,b)=>a+b,0), grossLoss=Math.abs(lossP.reduce((a,b)=>a+b,0));
   const avgWin=winP.length?grossWin/winP.length:0, avgLoss=lossP.length?grossLoss/lossP.length:0;
@@ -1029,11 +1048,32 @@ function emptyState(){
 }
 
 /* ================= render ================= */
+function acctLabel(k){ return k==="all"?"All accounts":((ACCTS.find(a=>a.k===k)||{}).name||k); }
+function rangeLabel(r){ return {all:"All time",week:"This week",month:"This month","30d":"Last 30 days"}[r]||"All time"; }
+function filterEmpty(){
+  return `<div class="empty"><b>No trades match this filter.</b>${acctLabel(curAcct())} · ${rangeLabel(curRange())} — nothing here yet. Widen the filter above.</div>`;
+}
+function renderFilterbar(){
+  const fb=$("#filterbar"); if(!fb) return;
+  const showOn=["chart","list","wins","strategy","calendar"];
+  if(!showOn.includes(state.ui.tab)){ fb.innerHTML=""; fb.style.display="none"; return; }
+  fb.style.display="flex";
+  const aOpts=[["all","All accounts"],...ACCTS.map(a=>[a.k,a.name])];
+  const rOpts=[["all","All time"],["week","This week"],["month","This month"],["30d","Last 30 days"]];
+  fb.innerHTML=`
+    <span class="flab">View</span>
+    <select id="f-acct">${aOpts.map(([v,l])=>`<option value="${v}" ${curAcct()===v?"selected":""}>${l}</option>`).join("")}</select>
+    <select id="f-range">${rOpts.map(([v,l])=>`<option value="${v}" ${curRange()===v?"selected":""}>${l}</option>`).join("")}</select>`;
+  $("#f-acct").onchange=e=>{ state.ui.fAcct=e.target.value; persist(); render(); };
+  $("#f-range").onchange=e=>{ state.ui.fRange=e.target.value; persist(); render(); };
+}
 function render(){
   const s=stats();
+  const scope=(curAcct()==="all"&&curRange()==="all")?"":`${acctLabel(curAcct())} · ${rangeLabel(curRange())} — `;
   $("#subline").textContent = s.n
-    ? `${s.n} trades · net ${money(s.net)} · ${s.winRate}% win rate · ${s.rulesRate}% rules followed`
-    : `MNQ · 3 funded accounts (TopstepX #1, TopstepX #2, Apex)`;
+    ? `${scope}${s.n} trades · net ${money(s.net)} · ${s.winRate}% win rate · ${s.rulesRate}% rules followed`
+    : (state.trades.length ? `${scope}no trades in this view` : `MNQ · 3 funded accounts (TopstepX #1, TopstepX #2, Apex)`);
+  renderFilterbar();
   const map={chart:viewChart,journal:viewJournal,list:viewList,wins:viewWins,strategy:viewStrategy,calendar:viewCalendar,gallery:viewGallery};
   $("#view").innerHTML=(map[state.ui.tab]||viewList)();
   bindViewEvents();
@@ -1160,11 +1200,13 @@ function addFiles(files){
 function downscale(dataUrl,cb){
   const img=new Image();
   img.onload=()=>{
-    const MAX=1600; let{width:w,height:h}=img;
-    if(w>MAX||h>MAX){ const r=Math.min(MAX/w,MAX/h); w=Math.round(w*r); h=Math.round(h*r); }
+    let{width:w,height:h}=img;
+    const MAXPX=5000000; // ~5MP — keeps ultrawide / extended-monitor screenshots sharp
+    const px=w*h;
+    if(px>MAXPX){ const r=Math.sqrt(MAXPX/px); w=Math.round(w*r); h=Math.round(h*r); }
     const c=document.createElement("canvas"); c.width=w; c.height=h;
     c.getContext("2d").drawImage(img,0,0,w,h);
-    try{ cb(c.toDataURL("image/jpeg",0.82)); }catch(e){ cb(dataUrl); }
+    try{ cb(c.toDataURL("image/jpeg",0.9)); }catch(e){ cb(dataUrl); }
   };
   img.onerror=()=>cb(dataUrl);
   img.src=dataUrl;
@@ -1322,13 +1364,6 @@ function handleCSVImport(text){
   syncTradeBlocks();
   persist(); render(); toast(`Imported ${parsed.length} trades → ${acctName(acct)}`);
 }
-$("#btn-import-csv").onclick=()=>$("#csv-file").click();
-$("#csv-file").addEventListener("change",e=>{
-  const f=e.target.files[0]; if(!f)return;
-  const rd=new FileReader();
-  rd.onload=()=>handleCSVImport(rd.result);
-  rd.readAsText(f); e.target.value="";
-});
 
 /* ================= boot ================= */
 (async function(){
