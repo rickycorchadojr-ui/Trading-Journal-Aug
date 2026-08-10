@@ -431,80 +431,6 @@ textarea.inp{height:auto;min-height:58px;padding:9px 11px;resize:vertical;line-h
 <button class="fab" id="fab" aria-label="Log trade">+</button>
 
 <!-- modal -->
-<div class="scrim" id="scrim">
-  <div class="modal" role="dialog" aria-modal="true">
-    <div class="modal-h">
-      <span class="t" id="m-title">Log trade</span>
-      <span class="pnl num" id="m-pnl">$0</span>
-      <button class="x" id="m-close" aria-label="Close">✕</button>
-    </div>
-    <div class="mbody">
-      <div class="frow">
-        <div class="f"><label>Date</label><input type="date" class="inp" id="f-date"></div>
-        <div class="f"><label>Direction</label>
-          <div class="seg" id="f-dir">
-            <button data-v="Long">Long</button><button data-v="Short">Short</button>
-          </div>
-        </div>
-      </div>
-      <div class="frow">
-        <div class="f"><label>Outcome</label>
-          <div class="seg" id="f-out">
-            <button data-v="WIN">Win</button><button data-v="LOSS">Loss</button>
-          </div>
-        </div>
-        <div class="f"><label>Strategy</label>
-          <div class="chips" id="f-strat">
-            <button class="chip blue" data-v="Strategy #1">#1</button>
-            <button class="chip pink" data-v="Strategy #2">#2</button>
-            <button class="chip gold" data-v="Strategy #3">#3</button>
-          </div>
-        </div>
-      </div>
-      <div class="frow">
-        <div class="f"><label>Contracts <span style="color:var(--text-faint)">(per account)</span></label>
-          <input type="number" inputmode="numeric" class="inp num" id="f-contracts" min="0" step="1" placeholder="4"></div>
-        <div class="f"><label>Points <span style="color:var(--text-faint)">(+ / −)</span></label>
-          <input type="number" inputmode="decimal" class="inp num" id="f-points" step="0.25" placeholder="e.g. 24 or -12"></div>
-      </div>
-      <div class="f">
-        <label>Accounts taken on</label>
-        <div class="acct-toggles" id="f-accts">
-          <button class="atog blue"   data-k="ts1"><span class="an">TopstepX #1</span><span class="ap num" data-slot="ts1">$0</span></button>
-          <button class="atog purple" data-k="ts2"><span class="an">TopstepX #2</span><span class="ap num" data-slot="ts2">$0</span></button>
-          <button class="atog orange" data-k="apex"><span class="an">Apex</span><span class="ap num" data-slot="apex">$0</span></button>
-        </div>
-        <div class="mini-note">Tap an account to toggle it. <button id="ovr-toggle" style="color:var(--accent);font-size:11.5px">Different size per account?</button></div>
-        <div class="frow" id="ovr-fields" style="display:none">
-          <div class="f"><label>TS #1 contracts</label><input type="number" inputmode="numeric" class="inp num" id="ov-ts1" min="0" step="1" placeholder="same"></div>
-          <div class="f"><label>TS #2 contracts</label><input type="number" inputmode="numeric" class="inp num" id="ov-ts2" min="0" step="1" placeholder="same"></div>
-          <div class="f"><label>Apex contracts</label><input type="number" inputmode="numeric" class="inp num" id="ov-apex" min="0" step="1" placeholder="same"></div>
-        </div>
-      </div>
-      <div class="switchrow">
-        <button class="switch on" id="f-rules" role="switch" aria-checked="true"></button>
-        <span class="lab">Rules followed</span>
-      </div>
-      <div class="f"><label>Notes</label><textarea class="inp" id="f-notes" placeholder="What made this an A+ setup — or what went wrong."></textarea></div>
-      <div class="f">
-        <label>Screenshots</label>
-        <div class="drop" id="drop" tabindex="0">
-          <div class="big">Add screenshots</div>
-          <div class="sm">Tap to choose from camera, library, or files — or paste / drag an image</div>
-        </div>
-        <input type="file" id="shot-input" accept="image/*" multiple hidden>
-        <div class="thumbs" id="thumbs"></div>
-      </div>
-    </div>
-    <div class="mfoot">
-      <button class="del" id="m-delete" style="display:none">Delete trade</button>
-      <div class="spacer" style="flex:1"></div>
-      <button class="btn" id="m-cancel">Cancel</button>
-      <button class="btn save" id="m-save">Save trade</button>
-    </div>
-  </div>
-</div>
-
 <div class="lightbox" id="lightbox"><button class="lx" id="lx-close">✕</button><img id="lx-img" alt="screenshot"></div>
 <div class="toast" id="toast"></div>
 
@@ -1239,77 +1165,6 @@ function bindViewEvents(){
   });
 }
 
-/* ================= modal / logging ================= */
-let editing=null, draftImages=[];
-function blankTrade(date){
-  return {id:null,seq:state.trades.length,date:date||iso(new Date()),dir:"Long",outcome:"WIN",
-    strategy:"Strategy #1",contracts:state.settings.lastContracts,points:null,
-    accts:{ts1:true,ts2:true,apex:true},ov:{},rules:true,notes:"",images:[]};
-}
-function openModal(id,presetDate){
-  const t=id?structuredClone(state.trades.find(x=>x.id===id)):blankTrade(presetDate);
-  editing=t; draftImages=[...t.images];
-  $("#m-title").textContent=id?"Edit trade":"Log trade";
-  $("#m-delete").style.display=id?"block":"none";
-  $("#f-date").value=t.date;
-  segSet("#f-dir",t.dir); segSet("#f-out",t.outcome);
-  chipSet(t.strategy);
-  $("#f-contracts").value=t.contracts??"";
-  $("#f-points").value=t.points??"";
-  ACCTS.forEach(a=>{
-    const el=$(`#f-accts [data-k="${a.k}"]`); el.classList.toggle("on",!!t.accts[a.k]);
-  });
-  $("#ov-ts1").value=t.ov.ts1??""; $("#ov-ts2").value=t.ov.ts2??""; $("#ov-apex").value=t.ov.apex??"";
-  const anyOv=t.ov.ts1||t.ov.ts2||t.ov.apex; $("#ovr-fields").style.display=anyOv?"grid":"none";
-  setSwitch($("#f-rules"),t.rules);
-  $("#f-notes").value=t.notes||"";
-  renderThumbs();
-  updatePnlPreview();
-  $("#scrim").classList.add("on");
-  document.body.style.overflow="hidden";
-}
-function closeModal(){ $("#scrim").classList.remove("on"); document.body.style.overflow=""; editing=null; draftImages=[]; }
-function segSet(sel,v){ $$(`${sel} button`).forEach(b=>b.classList.toggle("on",b.dataset.v===v)); }
-function segGet(sel){ const b=$(`${sel} button.on`); return b?b.dataset.v:null; }
-function chipSet(v){ $$("#f-strat .chip").forEach(c=>c.classList.toggle("on",c.dataset.v===v)); }
-function chipGet(){ const c=$("#f-strat .chip.on"); return c?c.dataset.v:"Strategy #1"; }
-function setSwitch(el,on){ el.classList.toggle("on",on); el.setAttribute("aria-checked",on); }
-function readForm(){
-  const t=editing;
-  t.date=$("#f-date").value||iso(new Date());
-  t.dir=segGet("#f-dir")||"Long";
-  t.outcome=segGet("#f-out")||"WIN";
-  t.strategy=chipGet();
-  t.contracts=$("#f-contracts").value===""?0:Number($("#f-contracts").value);
-  t.points=$("#f-points").value===""?0:Number($("#f-points").value);
-  ACCTS.forEach(a=>t.accts[a.k]=$(`#f-accts [data-k="${a.k}"]`).classList.contains("on"));
-  t.ov={ts1:$("#ov-ts1").value||"",ts2:$("#ov-ts2").value||"",apex:$("#ov-apex").value||""};
-  t.rules=$("#f-rules").classList.contains("on");
-  t.notes=$("#f-notes").value.trim();
-  t.images=[...draftImages];
-  return t;
-}
-function updatePnlPreview(){
-  const t=readForm();
-  ACCTS.forEach(a=>{ const el=$(`#f-accts .ap[data-slot="${a.k}"]`); const v=acctPnl(t,a.k);
-    el.textContent=money(v); });
-  const tp=totalPnl(t); const el=$("#m-pnl"); el.textContent=money(tp);
-  el.className="pnl num "+cls(tp);
-}
-function renderThumbs(){
-  $("#thumbs").innerHTML=draftImages.map((src,i)=>`<div class="thumb" data-i="${i}">
-    <img src="${src}" alt=""><button class="rm" data-rm="${i}" aria-label="Remove">✕</button></div>`).join("");
-  $$("#thumbs img").forEach((im,i)=>im.onclick=()=>openLightbox(draftImages[i]));
-  $$("#thumbs .rm").forEach(b=>b.onclick=e=>{ e.stopPropagation(); draftImages.splice(Number(b.dataset.rm),1); renderThumbs(); });
-}
-/* image intake + downscale */
-function addFiles(files){
-  [...files].filter(f=>f.type.startsWith("image/")).forEach(f=>{
-    const rd=new FileReader();
-    rd.onload=()=>downscale(rd.result,d=>{ draftImages.push(d); renderThumbs(); });
-    rd.readAsDataURL(f);
-  });
-}
 function downscale(dataUrl,cb){
   const img=new Image();
   img.onload=()=>{
@@ -1335,48 +1190,7 @@ let toastT;
 function toast(msg){ const el=$("#toast"); el.textContent=msg; el.classList.add("on");
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("on"),1800); }
 
-/* ================= modal wiring ================= */
-$$("#f-dir button, #f-out button").forEach(b=>b.onclick=()=>{ segSet("#"+b.parentElement.id,b.dataset.v);
-  if(b.parentElement.id==="f-out"){/* manual */} updatePnlPreview(); });
-// auto-suggest outcome from points sign (only if user hasn't been in outcome yet is complex; keep simple: on points change, set if empty-ish)
-$("#f-points").addEventListener("input",()=>{
-  const v=Number($("#f-points").value);
-  if(!Number.isNaN(v)&&v!==0){ segSet("#f-out",v>0?"WIN":"LOSS"); }
-  updatePnlPreview();
-});
-$("#f-contracts").addEventListener("input",updatePnlPreview);
-$$("#f-strat .chip").forEach(c=>c.onclick=()=>chipSet(c.dataset.v));
-$$("#f-accts .atog").forEach(b=>b.onclick=()=>{ b.classList.toggle("on"); updatePnlPreview(); });
-["#ov-ts1","#ov-ts2","#ov-apex"].forEach(s=>$(s).addEventListener("input",updatePnlPreview));
-$("#ovr-toggle").onclick=e=>{ e.preventDefault(); const f=$("#ovr-fields"); f.style.display=f.style.display==="none"?"grid":"none"; };
-$("#f-rules").onclick=()=>setSwitch($("#f-rules"),!$("#f-rules").classList.contains("on"));
-$("#m-close").onclick=closeModal; $("#m-cancel").onclick=closeModal;
-$("#scrim").onclick=e=>{ if(e.target.id==="scrim")closeModal(); };
-$("#m-delete").onclick=()=>{
-  if(!editing||!editing.id)return;
-  state.trades=state.trades.filter(t=>t.id!==editing.id);
-  persist(); closeModal(); render(); toast("Trade deleted");
-};
-$("#m-save").onclick=()=>{
-  const t=readForm();
-  if(t.id){ const i=state.trades.findIndex(x=>x.id===t.id); state.trades[i]=t; }
-  else{ t.id="t"+Date.now()+Math.random().toString(36).slice(2,6); t.seq=state.trades.length; state.trades.push(t); }
-  state.settings.lastContracts=t.contracts||state.settings.lastContracts;
-  persist(); closeModal(); render(); toast(t.id?"Trade saved":"Trade logged");
-};
-/* screenshot intake */
-$("#drop").onclick=()=>$("#shot-input").click();
-$("#drop").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();$("#shot-input").click();} });
-$("#shot-input").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
-["dragover","dragenter"].forEach(ev=>$("#drop").addEventListener(ev,e=>{e.preventDefault();$("#drop").classList.add("hot");}));
-["dragleave","drop"].forEach(ev=>$("#drop").addEventListener(ev,e=>{e.preventDefault();$("#drop").classList.remove("hot");}));
-$("#drop").addEventListener("drop",e=>{ if(e.dataTransfer&&e.dataTransfer.files)addFiles(e.dataTransfer.files); });
-document.addEventListener("paste",e=>{ if(!$("#scrim").classList.contains("on"))return;
-  const items=e.clipboardData&&e.clipboardData.items; if(!items)return;
-  const files=[...items].filter(i=>i.type.startsWith("image/")).map(i=>i.getAsFile()).filter(Boolean);
-  if(files.length){ addFiles(files); toast(files.length+" screenshot"+(files.length>1?"s":"")+" added"); }
-});
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); $("#lightbox").classList.remove("on"); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ $("#lightbox").classList.remove("on"); } });
 
 /* ================= header actions ================= */
 $("#btn-new").onclick=()=>logTradeJournal();
@@ -1410,74 +1224,6 @@ $("#import-file").addEventListener("change",e=>{
   }catch(err){ toast("Couldn't read that file"); } };
   rd.readAsText(f); e.target.value="";
 });
-
-/* ============ TopstepX CSV import ============ */
-function splitCSVLine(line){
-  const out=[]; let cur="", q=false;
-  for(let i=0;i<line.length;i++){ const ch=line[i];
-    if(q){ if(ch==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
-    else { if(ch===','){out.push(cur);cur="";} else if(ch==='"'){q=true;} else cur+=ch; }
-  }
-  out.push(cur); return out;
-}
-function parseDT(s){ // "08/07/2026 08:44:59 -07:00"
-  const parts=(s||"").trim().split(/\s+/);
-  const dp=(parts[0]||"").split("/");
-  if(dp.length<3) return {date:iso(new Date()),time:""};
-  const [mm,dd,yyyy]=dp;
-  return {date:`${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`, time:(parts[1]||"").slice(0,5)};
-}
-function instrumentRoot(c){ return ((c||"").replace(/[FGHJKMNQUVXZ]\d+$/,"")||"MNQ"); }
-function fmtDur(s){ // "00:01:13.6800880" -> "1m 13s"
-  const m=(s||"").match(/(\d+):(\d+):(\d+)/); if(!m) return s||"";
-  const h=+m[1],mi=+m[2],se=+m[3];
-  return (h?h+"h ":"")+(mi?mi+"m ":"")+se+"s";
-}
-function parseTopstepCSV(text){
-  const lines=text.split(/\r?\n/).filter(l=>l.trim());
-  if(lines.length<2) return [];
-  const H=splitCSVLine(lines[0]).map(h=>h.trim().toLowerCase());
-  const col=n=>H.indexOf(n.toLowerCase());
-  const iP=col("PnL"), iEnter=col("EnteredAt"), iExit=col("ExitedAt"), iType=col("Type"),
-        iSize=col("Size"), iC=col("ContractName"), iFee=col("Fees"), iCom=col("Commissions"),
-        iEP=col("EntryPrice"), iXP=col("ExitPrice"), iDur=col("TradeDuration"), iId=col("Id");
-  if(iP<0||iEnter<0||iType<0) return null; // not a TopstepX trades export
-  const out=[];
-  for(let r=1;r<lines.length;r++){
-    const c=splitCSVLine(lines[r]); if(c.length<H.length) continue;
-    const pnl=parseFloat(c[iP]); if(isNaN(pnl)) continue;
-    const size=parseInt(c[iSize])||1;
-    const en=parseDT(c[iEnter]);
-    out.push({ id:(c[iId]||"").trim(), date:en.date, time:en.time,
-      dir:/short/i.test(c[iType])?"Short":"Long", size, pnl,
-      fees:parseFloat(c[iFee])||0, comm:parseFloat(c[iCom])||0,
-      entryPrice:parseFloat(c[iEP])||null, exitPrice:parseFloat(c[iXP])||null,
-      duration:fmtDur(c[iDur]), instrument:instrumentRoot(c[iC]) });
-  }
-  return out;
-}
-function acctName(k){ return (ACCTS.find(a=>a.k===k)||{}).name||k; }
-function mapImported(p, acct, i){
-  const accts={ts1:false,ts2:false,apex:false}; accts[acct]=true;
-  const pts = p.size ? p.pnl/(p.size*MULT) : 0; // MNQ-equivalent points so P&L reproduces exactly
-  return { id:"imp"+(p.id||(Date.now()+"_"+i)), seq:i, date:p.date, dir:p.dir,
-    outcome:p.pnl>=0?"WIN":"LOSS", strategy:"Strategy #1", contracts:p.size, points:pts,
-    accts, ov:{}, rules:true, notes:"Imported"+(p.time?" · "+p.time:""), images:[],
-    imported:true, time:p.time, duration:p.duration, fees:p.fees, comm:p.comm,
-    entryPrice:p.entryPrice, exitPrice:p.exitPrice, instrument:p.instrument, realPnl:p.pnl };
-}
-function handleCSVImport(text){
-  const acct=$("#import-acct").value||"ts1";
-  const parsed=parseTopstepCSV(text);
-  if(parsed===null){ toast("Doesn't look like a TopstepX trades export"); return; }
-  if(!parsed.length){ toast("No trades found in that file"); return; }
-  const replace=state.trades.length ? confirm(`Import ${parsed.length} trades into ${acctName(acct)}.\n\nOK = replace the trades you have now.\nCancel = add these to them.`) : false;
-  const mapped=parsed.map((p,i)=>mapImported(p,acct,i));
-  state.trades = replace ? mapped : state.trades.concat(mapped);
-  state.trades.forEach((t,i)=>t.seq=i);
-  syncTradeBlocks();
-  persist(); render(); toast(`Imported ${parsed.length} trades → ${acctName(acct)}`);
-}
 
 /* ================= boot ================= */
 (async function(){
