@@ -178,6 +178,20 @@ tfoot .num{color:var(--text)}
 .gcard .bd .r{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .gcard .bd .r+.r{margin-top:5px}
 .gcard .nm{color:#fff;font-weight:600;font-size:13.5px}
+/* shared trade card (boards + gallery) */
+.galg{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.tcard{background:var(--bg-elev);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .12s}
+.tcard:hover{border-color:var(--line)}
+.bcol .tcard{margin-bottom:8px}
+.tcimg{width:100%;aspect-ratio:16/10;object-fit:cover;display:block;background:#141414}
+.tcimg.tcph{display:grid;place-items:center;color:var(--text-faint);font-size:11.5px}
+.tcbd{padding:8px 10px}
+.tcr{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tcr+.tcr{margin-top:5px}
+.tcname{color:#fff;font-weight:600;font-size:13.5px}
+.tcdate{color:var(--text-dim);font-size:11.5px}
+.mring{vertical-align:middle;margin-right:6px}
+.lpnl{display:inline-flex;align-items:center;justify-content:flex-end}
 
 /* ============ Dashboard ============ */
 .dash{display:flex;flex-direction:column;gap:26px}
@@ -535,7 +549,7 @@ function money(n){
 }
 function signed(n){ return (n>0?"+":n<0?"":"")+money(n); }
 function moneyK(n){ const a=Math.abs(n); if(a>=1000) return (n<0?"-$":"$")+(a/1000).toFixed(1)+"k"; return money(n); }
-function pctOf(n){ const c=Number(state.settings.startingCapital)||0; return c>0 ? n/c*100 : 0; }
+function pctOf(n){ const c=accountsCap(); return c>0 ? n/c*100 : 0; }
 function fmtPct(n){ return (n>0?"+":"")+n.toFixed(2)+"%"; }
 function cls(n){ return n>0?"pos":n<0?"neg":""; }
 function iso(d){ return d.toISOString().slice(0,10); }
@@ -651,47 +665,74 @@ function renderTabs(){
 
 /* ================= pills ================= */
 function outcomePill(o){ return `<span class="pill ${o==='WIN'?'green':'red'}">${o}</span>`; }
-function stratPill(s){ return `<span class="pill ${STRATS[s].cls}">${s}</span>`; }
+function stratPill(s){ const S=STRATS[s]; return S?`<span class="pill ${S.cls}">${s}</span>`:`<span class="pill gray">No strategy</span>`; }
 function dirPill(d){ return `<span class="pill ${d==='Long'?'blue':'orange'}">${d}</span>`; }
+/* per-trade screenshots = image blocks between this trade's strip and the next trade in its day */
+function tradeImages(t){
+  const d=state.days[t.date]; if(!d) return [];
+  const bl=d.blocks||[]; const i=bl.findIndex(b=>b.type==="trade"&&b.tradeId===t.id); if(i<0) return [];
+  const out=[]; for(let j=i+1;j<bl.length;j++){ if(bl[j].type==="trade") break; if(bl[j].type==="image") out.push(bl[j].src); }
+  return out;
+}
+function accountsCap(){ const a=curAcct(); return a==="all" ? ACCTS.reduce((s,x)=>s+(Number(acctCfg(x.k).size)||0),0) : (Number(acctCfg(a).size)||0); }
+function acctShort(t){
+  const on=ACCTS.filter(a=>t.accts[a.k]);
+  if(!on.length) return "—";
+  if(on.length===ACCTS.length) return "All";
+  return on.map(a=>a.name.replace("TopstepX ","TS")).join(" · ");
+}
+function miniRing(v,maxAbs){
+  const r=8, C=2*Math.PI*r, pct=maxAbs>0?Math.min(1,Math.abs(v)/maxAbs):0, off=C*(1-pct);
+  const col=v>0?"#4dd58a":v<0?"#ff6b6b":"rgba(255,255,255,.3)";
+  return `<svg class="mring" width="20" height="20" viewBox="0 0 22 22"><circle cx="11" cy="11" r="${r}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="2.4"/><circle cx="11" cy="11" r="${r}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 11 11)"/></svg>`;
+}
+function tradeCard(t){
+  const img=tradeImages(t)[0], tp=vPnl(t);
+  const media=img?`<img class="tcimg" src="${img}" alt="">`:`<div class="tcimg tcph">no screenshot</div>`;
+  return `<div class="tcard" data-id="${t.id}">
+    ${media}
+    <div class="tcbd">
+      <div class="tcr"><span class="tcname">MNQ</span>${outcomePill(t.outcome)}<span class="num ${cls(tp)}" style="margin-left:auto;font-weight:600;font-size:13px">${money(tp)}</span></div>
+      <div class="tcr"><span class="tcdate">${fmtDateLong(t.date)}</span>${t.emoji?`<span style="margin-left:auto;font-size:14px">${t.emoji}</span>`:''}</div>
+      <div class="tcr">${stratPill(t.strategy)}${t.time?`<span style="margin-left:auto;color:var(--text-faint);font-size:11px">${t.time}</span>`:''}</div>
+    </div></div>`;
+}
 
 /* ================= VIEW: list ================= */
 function viewList(){
   const rows=visibleTrades();
   if(!rows.length) return state.trades.length?filterEmpty():emptyState();
+  const maxAbs=Math.max(1,...rows.map(t=>Math.abs(vPnl(t))));
   const head=`<tr>
-    <th><span class="hd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Pair</span></th>
-    <th><span class="hd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg>Outcome</span></th>
-    <th><span class="hd">Direction</span></th>
-    <th><span class="hd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16"/></svg>Date</span></th>
-    <th><span class="hd">Strategy</span></th>
-    <th style="text-align:right">Pts</th>
-    <th style="text-align:right">TS #1</th><th style="text-align:right">TS #2</th><th style="text-align:right">Apex</th>
-    <th style="text-align:right">Total P&L</th>
-    <th style="text-align:center">Rules</th></tr>`;
+    <th style="text-align:right">#</th>
+    <th>Time</th>
+    <th>W/L</th>
+    <th style="text-align:right">P&L</th>
+    <th style="text-align:center">→</th>
+    <th>Dir</th>
+    <th>Duration</th>
+    <th>Strategy</th>
+    <th>Account</th>
+    <th style="text-align:center">Feel</th></tr>`;
   const body=rows.map(t=>{
-    const tp=vPnl(t), imgN=t.images.length;
+    const tp=vPnl(t);
     return `<tr data-id="${t.id}">
-      <td><span class="pair">${imgN?`<svg class="clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5V7a4 4 0 00-8 0v9a2 2 0 004 0V8"/></svg>`:''}MNQ</span></td>
+      <td class="num" style="text-align:right;color:var(--text-faint)">${tradeNumber(t.id)}</td>
+      <td class="num" style="color:var(--text-mid)">${t.time||"—"}</td>
       <td>${outcomePill(t.outcome)}</td>
+      <td style="text-align:right"><span class="lpnl">${miniRing(tp,maxAbs)}<span class="num ${cls(tp)}" style="font-weight:600">${money(tp)}</span></span></td>
+      <td style="text-align:center">${t.immediate?'<span class="check-ok">✓</span>':'<span class="check-no">—</span>'}</td>
       <td>${dirPill(t.dir)}</td>
-      <td style="color:var(--text-mid)">${fmtDateLong(t.date)}</td>
+      <td class="num" style="color:var(--text-mid)">${t.duration||"—"}</td>
       <td>${stratPill(t.strategy)}</td>
-      <td class="num" style="text-align:right;color:var(--text-mid)">${t.points>0?"+":""}${t.points}</td>
-      <td class="num ${cls(acctPnl(t,'ts1'))}" style="text-align:right">${money(acctPnl(t,'ts1'))}</td>
-      <td class="num ${cls(acctPnl(t,'ts2'))}" style="text-align:right">${money(acctPnl(t,'ts2'))}</td>
-      <td class="num ${cls(acctPnl(t,'apex'))}" style="text-align:right">${money(acctPnl(t,'apex'))}</td>
-      <td style="text-align:right"><div class="num ${cls(tp)}" style="font-weight:600">${money(tp)}</div><div class="num" style="color:var(--text-faint);font-size:11px">${fmtPct(pctOf(tp))}</div></td>
-      <td style="text-align:center">${t.rules?'<span class="check-ok">✓</span>':'<span class="check-no">—</span>'}</td>
+      <td style="color:var(--text-mid);font-size:13px">${acctShort(t)}</td>
+      <td style="text-align:center;font-size:15px">${t.emoji||"·"}</td>
     </tr>`;}).join("");
   const s=stats();
   const foot=`<tr>
-    <td colspan="5" style="color:var(--text-dim)">${rows.length} trades · ${s.winRate}% win · ${s.rulesRate}% rules</td>
-    <td></td>
-    <td class="num ${cls(s.byAcct.ts1)}" style="text-align:right">${money(s.byAcct.ts1)}</td>
-    <td class="num ${cls(s.byAcct.ts2)}" style="text-align:right">${money(s.byAcct.ts2)}</td>
-    <td class="num ${cls(s.byAcct.apex)}" style="text-align:right">${money(s.byAcct.apex)}</td>
-    <td class="num ${cls(s.net)}" style="text-align:right;font-weight:700">${money(s.net)}</td>
-    <td></td></tr>`;
+    <td></td><td colspan="2" style="color:var(--text-dim)">${rows.length} trades · ${s.winRate}% win</td>
+    <td style="text-align:right;font-weight:700" class="num ${cls(s.net)}">${money(s.net)}</td>
+    <td colspan="6" style="color:var(--text-dim)">${s.rulesRate}% rules followed</td></tr>`;
   return `<div class="cols-scroll"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
 }
 
@@ -699,13 +740,7 @@ function viewList(){
 function board(groups){
   return `<div class="board">`+groups.map(g=>{
     const sum=g.items.reduce((s,t)=>s+vPnl(t),0);
-    const cards=g.items.map(t=>{
-      const cover=t.images[0];
-      return `<div class="card" data-id="${t.id}">
-        ${cover?`<img class="cover" src="${cover}" alt="">`:''}
-        <div class="r"><span class="name">MNQ</span>${outcomePill(t.outcome)}${dirPill(t.dir)}</div>
-        <div class="r"><span class="meta">${fmtDateLong(t.date)}</span><span class="meta num ${cls(vPnl(t))}" style="margin-left:auto;font-weight:600">${money(vPnl(t))} <span style="color:var(--text-faint);font-weight:400">${fmtPct(pctOf(vPnl(t)))}</span></span></div>
-      </div>`;}).join("")||`<div class="meta" style="color:var(--text-faint);padding:6px 2px">No trades</div>`;
+    const cards=g.items.map(tradeCard).join("")||`<div class="meta" style="color:var(--text-faint);padding:6px 2px">No trades</div>`;
     return `<div class="bcol">
       <div class="bcol-h">${g.head}<span class="count">${g.items.length}</span><span class="sum num ${cls(sum)}">${money(sum)}</span></div>
       ${cards}</div>`;
@@ -718,8 +753,10 @@ function viewWins(){
 }
 function viewStrategy(){
   if(!state.trades.length) return emptyState();
-  const g=s=>({head:stratPill(s),items:visibleTrades().filter(t=>t.strategy===s)});
-  return board(Object.keys(STRATS).map(g));
+  const vis=visibleTrades();
+  const groups=Object.keys(STRATS).map(s=>({head:stratPill(s),items:vis.filter(t=>t.strategy===s)}));
+  groups.push({head:stratPill(""),items:vis.filter(t=>!STRATS[t.strategy])});
+  return board(groups);
 }
 
 /* ================= VIEW: calendar ================= */
@@ -757,11 +794,14 @@ function viewCalendar(){
 
 /* ================= VIEW: gallery ================= */
 function viewGallery(){
-  const imgs=allImageBlocks();
-  if(!imgs.length) return `<div class="empty"><b>No screenshots yet.</b>Add them in the Journal — they collect here automatically.</div>`;
-  const cards=imgs.map(im=>`<div class="gcard"><img class="shot" src="${im.src}" alt="" data-golx="${im.id}">
-    <div class="bd"><div class="r"><span style="color:var(--text-dim);font-size:11.5px">${fmtDateLong(im.date)}</span></div></div></div>`).join("");
-  return `<div class="gal">${cards}</div>`;
+  if(!state.trades.length) return `<div class="empty"><b>No trades yet.</b>Log trades in the Journal — they appear here grouped by strategy, each with its screenshot.</div>`;
+  const vis=visibleTrades();
+  const html=[...Object.keys(STRATS),""].map(s=>{
+    const items = s ? vis.filter(t=>t.strategy===s) : vis.filter(t=>!STRATS[t.strategy]);
+    if(!items.length) return "";
+    return `<div class="gal-grp"><h4>${stratPill(s)} <span style="color:var(--text-faint)">${items.length}</span></h4><div class="galg">${items.map(tradeCard).join("")}</div></div>`;
+  }).join("");
+  return html||filterEmpty();
 }
 
 /* ================= Journal (day document) ================= */
@@ -795,7 +835,7 @@ function allImageBlocks(){
 }
 function newJournalTrade(date){
   return { id:"t"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), seq:state.trades.length,
-    date, dir:"Long", outcome:"WIN", strategy:"Strategy #1", contracts:1, points:0,
+    date, dir:"Long", outcome:"WIN", strategy:"", contracts:1, points:0,
     accts:{ts1:true,ts2:false,apex:false}, ov:{}, rules:true, notes:"",
     pnl:null, time:"", duration:"", immediate:false, emoji:"", images:[] };
 }
@@ -842,7 +882,7 @@ function renderBlock(b){
       <label class="imm" title="Went my way immediately"><input type="checkbox" data-f="immediate" ${t.immediate?"checked":""}> →</label>
       <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
       <input class="ti dur" data-f="duration" placeholder="dur" value="${escapeHtml(t.duration||"")}">
-      <select class="ti strat" data-f="strategy">${Object.keys(STRATS).map(sName=>`<option value="${sName}" ${t.strategy===sName?"selected":""}>${sName.replace("Strategy ","")}</option>`).join("")}</select>
+      <select class="ti strat" data-f="strategy"><option value="" ${!STRATS[t.strategy]?"selected":""}>None</option>${Object.keys(STRATS).map(sName=>`<option value="${sName}" ${t.strategy===sName?"selected":""}>${sName.replace("Strategy ","")}</option>`).join("")}</select>
       <select class="ti acct" data-f="acct">${ACCTS.map(a=>`<option value="${a.k}" ${t.accts[a.k]?"selected":""}>${a.name.replace("TopstepX","TS")}</option>`).join("")}</select>
       <select class="ti emo" data-f="emoji">${["",...EMOJIS].map(e=>`<option ${t.emoji===e?"selected":""}>${e||"·"}</option>`).join("")}</select>
       <button class="del" data-tdel="${t.id}" data-tbid="${b.id}">🗑</button>
@@ -919,7 +959,7 @@ function stats(){
   const profitFactor=grossLoss>0?grossWin/grossLoss:(grossWin>0?Infinity:0);
   const expectancyR=avgLoss>0?(gross/(n||1))/avgLoss:0;
   const best=pnls.length?Math.max(...pnls):0, worst=pnls.length?Math.min(...pnls):0;
-  const cap=Number(state.settings.startingCapital)||0;
+  const cap=accountsCap();
   let peak=cap,maxDD=0;
   withEquity().forEach(d=>{ const bal=cap+d.equity; if(bal>peak)peak=bal; const dd=peak>0?(peak-bal)/peak*100:0; if(dd>maxDD)maxDD=dd; });
   return {n,wins,losses,rules,gross,comm,net,byAcct,byAcctNet,byStrat,grossWin,grossLoss,avgWin,avgLoss,profitFactor,expectancyR,best,worst,maxDD,cap,
@@ -1011,7 +1051,7 @@ function viewChart(){
   const dayData=withEquity().map(d=>({label:parseISO(d.t.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}),value:totalPnl(d.t)}));
   const S=(k,v,c="")=>`<div class="statcell"><div class="k">${k}</div><div class="val num ${c}">${v}</div></div>`;
   const perf=`<div class="panel"><h3>◔ Performance</h3><div class="statgrid">
-    <div class="statcell"><div class="k">Account size</div><input class="capinput num" id="cap-input" type="number" inputmode="numeric" value="${s.cap}"></div>
+    ${S("Account size",money(s.cap))}
     ${S("Current balance",money(s.currentBalance))}
     ${S("Gross P&L",money(s.gross),cls(s.gross))}
     ${S("Fees & comm",s.comm?money(-s.comm):"$0",s.comm?"neg":"")}
@@ -1093,8 +1133,6 @@ function bindViewEvents(){
     if(e.target.closest("[data-id]"))return;
     state.ui.jDate=c.dataset.date; state.ui.tab="journal"; persist(); renderTabs(); render();
   }));
-  const cap=$("#cap-input");
-  if(cap) cap.addEventListener("change",()=>{ state.settings.startingCapital=Number(cap.value)||0; persist(); render(); });
   $$("#view [data-acfg]").forEach(el=>el.addEventListener("change",()=>{
     const k=el.dataset.acfg, f=el.dataset.fld;
     state.settings.accounts=state.settings.accounts||{}; state.settings.accounts[k]=state.settings.accounts[k]||{};
