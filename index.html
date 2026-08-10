@@ -138,9 +138,9 @@ tfoot .num{color:var(--text)}
 .nav button:hover{background:var(--hover-strong)}
 .today-btn{height:30px;padding:0 11px;border-radius:5px;background:var(--hover);font-size:13px}
 .today-btn:hover{background:var(--hover-strong)}
-.cal .wkhdr{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.cal .wkhdr{display:grid;grid-template-columns:repeat(7,1fr) 98px;gap:6px;margin-bottom:6px}
 .cal .wd{padding:2px 8px;font-size:11px;color:var(--text-dim)}
-.cal .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .grid{display:grid;grid-template-columns:repeat(7,1fr) 98px;gap:6px}
 .cal .cell{min-height:92px;padding:8px 9px;border-radius:10px;position:relative;cursor:pointer;
   background:var(--bg-elev);border:1px solid var(--line-soft);transition:border-color .1s}
 .cal .cell:hover{border-color:var(--line)}
@@ -154,11 +154,21 @@ tfoot .num{color:var(--text)}
 .cal .daybody{margin-top:24px;text-align:center}
 .cal .daybody .amt{font-size:15px;font-weight:700}
 .cal .daybody .sub{font-size:10px;color:var(--text-faint);margin-top:2px}
+.cal .wkcol{min-height:92px;padding:10px 10px;border-radius:10px;background:rgba(255,255,255,.028);
+  border:1px solid var(--line-soft);display:flex;flex-direction:column;justify-content:center;gap:3px}
+.cal .wkcol .wkn{font-size:11px;color:var(--text-dim)}
+.cal .wkcol .wkamt{font-size:15px;font-weight:700}
+.cal .wkcol .wkd{font-size:10.5px;color:var(--text-faint)}
 @media(max-width:720px){
+  .cal .wkhdr{grid-template-columns:repeat(7,1fr) 64px}
+  .cal .grid{grid-template-columns:repeat(7,1fr) 64px}
   .cal .cell{min-height:72px;padding:6px 7px}
   .cal .daybody{margin-top:20px}
   .cal .daybody .amt{font-size:13px}
   .cal .daybody .sub{display:none}
+  .cal .wkcol{padding:6px 6px}
+  .cal .wkcol .wkamt{font-size:12px}
+  .cal .wkcol .wkn{font-size:9.5px}
 }
 
 /* ============ Gallery ============ */
@@ -766,30 +776,38 @@ function viewCalendar(){
   const first=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
   const byDate={}; visibleTrades().forEach(t=>{ (byDate[t.date]=byDate[t.date]||[]).push(t); });
-  const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="wd">${d}</div>`).join("");
-  let cells="";
-  const total=Math.ceil((first+days)/7)*7;
-  for(let i=0;i<total;i++){
-    const dnum=i-first+1;
-    if(dnum<1||dnum>days){ cells+=`<div class="cell out"></div>`; continue; }
-    const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(dnum).padStart(2,"0")}`;
-    const dayTrades=byDate[ds]||[];
-    if(!dayTrades.length){ cells+=`<div class="cell empty" data-date="${ds}"><span class="dn num">${dnum}</span></div>`; continue; }
-    const net=dayTrades.reduce((s,t)=>s+vPnl(t),0);
-    const k=net>=0?"green":"red", nt=dayTrades.length;
-    cells+=`<div class="cell ${k}" data-date="${ds}">
-      <span class="dn num">${dnum}</span>
-      <div class="daybody">
-        <div class="amt num ${cls(net)}">${signed(net)}</div>
-        <div class="sub num">${fmtPct(pctOf(net))} · ${nt} trade${nt>1?"s":""}</div>
-      </div></div>`;
+  const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="wd">${d}</div>`).join("")+`<div class="wd">Week</div>`;
+  const numWeeks=Math.ceil((first+days)/7);
+  let rows="";
+  for(let w=0;w<numWeeks;w++){
+    let weekNet=0, weekDays=0, cells="";
+    for(let d=0;d<7;d++){
+      const dnum=w*7+d-first+1;
+      if(dnum<1||dnum>days){ cells+=`<div class="cell out"></div>`; continue; }
+      const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(dnum).padStart(2,"0")}`;
+      const dayTrades=byDate[ds]||[];
+      if(!dayTrades.length){ cells+=`<div class="cell empty" data-date="${ds}"><span class="dn num">${dnum}</span></div>`; continue; }
+      const net=dayTrades.reduce((s,t)=>s+vPnl(t),0);
+      weekNet+=net; weekDays++;
+      const k=net>=0?"green":"red", nt=dayTrades.length;
+      cells+=`<div class="cell ${k}" data-date="${ds}">
+        <span class="dn num">${dnum}</span>
+        <div class="daybody">
+          <div class="amt num ${cls(net)}">${signed(net)}</div>
+          <div class="sub num">${fmtPct(pctOf(net))} · ${nt} trade${nt>1?"s":""}</div>
+        </div></div>`;
+    }
+    const wk=`<div class="wkcol"><div class="wkn">Week ${w+1}</div>
+      <div class="wkamt num ${weekDays?cls(weekNet):''}"${weekDays?"":' style="color:var(--text-faint)"'}>${signed(weekNet)}</div>
+      <div class="wkd">${weekDays} day${weekDays===1?"":"s"}</div></div>`;
+    rows+=cells+wk;
   }
   return `<div class="cal-h">
       <div class="nav"><button data-nav="-1">‹</button><button data-nav="1">›</button></div>
       <div class="m">${monthName}</div>
       <button class="today-btn" data-nav="today">Today</button>
     </div>
-    <div class="cal"><div class="wkhdr">${wd}</div><div class="grid">${cells}</div></div>`;
+    <div class="cal"><div class="wkhdr">${wd}</div><div class="grid">${rows}</div></div>`;
 }
 
 /* ================= VIEW: gallery ================= */
