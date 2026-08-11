@@ -308,6 +308,14 @@ svg.line{width:100%;height:auto;max-height:340px;display:block}
 .jtstrip{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px 9px;border-radius:9px;
   background:var(--bg-elev);border:1px solid var(--line-soft);font-size:12.5px}
 .jtstrip .tnum{color:var(--text-faint);font-weight:700;min-width:26px;text-align:center}
+.jtstrip.prac{border-color:rgba(228,151,198,.5);background:rgba(228,151,198,.06)}
+.prac-tag{font-size:8.5px;font-weight:700;letter-spacing:.5px;color:#e491c6;background:rgba(228,151,198,.16);padding:2px 5px;border-radius:4px}
+.pracbar{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.pracbar .d{font-size:16px;font-weight:600;color:#fff}
+.pracbar.on{padding:10px 12px;border-radius:10px;background:rgba(228,151,198,.09);border:1px solid rgba(228,151,198,.34)}
+.pracclear{height:30px;padding:0 11px;border-radius:6px;background:var(--hover);border:1px solid var(--line);color:var(--text-dim);font-size:12px;cursor:pointer;margin-left:auto}
+.pracclear:hover{color:var(--c-red);border-color:var(--c-red)}
+.pracmsg{color:var(--text-dim);font-size:12.5px;line-height:1.5;margin-bottom:14px;max-width:640px}
 .jtstrip .ti{height:28px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:#fff;
   font-family:var(--mono);font-size:12.5px;padding:0 7px;max-width:100%}
 .jtstrip .ti:focus{outline:none;border-color:var(--accent)}
@@ -571,8 +579,9 @@ function acctComm(t,k){
 }
 function tradeComm(t){ return accounts().reduce((s,a)=>s+acctComm(t,a.id),0); }
 function tradeNet(t){ return totalPnl(t)-tradeComm(t); }
+const PRACTICE_DAY="__practice__";
 function sortedTrades(){
-  return [...state.trades].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq));
+  return [...state.trades].filter(t=>!t.practice).sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq));
 }
 function curAcct(){ return (state.ui&&state.ui.fAcct)||"all"; }
 function curRange(){ return (state.ui&&state.ui.fRange)||"all"; }
@@ -871,24 +880,43 @@ function allImageBlocks(){
   return out;
 }
 function newJournalTrade(date){
+  const practice=(date===PRACTICE_DAY);
   return { id:"t"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), seq:state.trades.length,
     date, dir:"Long", outcome:"WIN", strategy:"", contracts:1, points:0,
-    accts:(function(){var o={},f=accounts()[0];if(f)o[f.id]=true;return o;})(), ov:{}, rules:true, notes:"",
-    pnl:null, time:"", duration:"", immediate:false, emoji:"", images:[] };
+    accts: practice?{}:(function(){var o={},f=accounts()[0];if(f)o[f.id]=true;return o;})(), ov:{}, rules:true, notes:"",
+    pnl:null, time:"", duration:"", immediate:false, emoji:"", images:[], practice };
 }
 
 function viewJournal(){
   const date=jDate();
+  const isPrac=(date===PRACTICE_DAY);
   const d=state.days[date]||{blocks:[]};
+  const blocks=(d.blocks||[]).map(renderBlock).join("");
+  const empty=(d.blocks||[]).length? "" : `<div style="color:var(--text-faint);font-size:14px;padding:8px 0">Empty day — add a screenshot, a note, or a trade below.</div>`;
+  if(isPrac){
+    const nPrac=state.trades.filter(t=>t.practice).length;
+    return `<div class="pracbar on">
+        <button class="today-btn" data-jnav="exit-practice">‹ Back to journal</button>
+        <span class="d">🎯 Practice sandbox</span>
+        ${nPrac?`<button class="pracclear" data-prac-clear="1">Clear practice (${nPrac})</button>`:""}
+      </div>
+      <div class="pracmsg">Rehearse the full routine here — nothing in this sandbox is numbered, tied to an account, or counted anywhere. Add trades, screenshots, and notes freely, then clear it when you're done.</div>
+      <div class="jdoc">${empty}${blocks}
+        <div class="jadd">
+          <button data-jadd="image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M3 16l5-4 4 3 3-2 6 5"/></svg>Screenshot</button>
+          <button data-jadd="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h11M4 18h16"/></svg>Note</button>
+          <button data-jadd="trade"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18l6-6 4 4 6-8"/></svg>Practice trade</button>
+        </div>
+      </div>`;
+  }
   const long=parseISO(date).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
   const dayTrades=sortedTrades().filter(t=>t.date===date);
   const net=dayTrades.reduce((s,t)=>s+tradeNet(t),0);
-  const blocks=(d.blocks||[]).map(renderBlock).join("");
-  const empty=(d.blocks||[]).length? "" : `<div style="color:var(--text-faint);font-size:14px;padding:8px 0">Empty day — add a screenshot, a note, or a trade below.</div>`;
   return `<div class="jhead">
       <div class="nav"><button data-jnav="-1">‹</button><button data-jnav="1">›</button></div>
       <div class="d">${long}</div>
       <button class="today-btn" data-jnav="today">Today</button>
+      <button class="today-btn" data-jnav="practice" title="Practice without affecting your data">🎯 Practice</button>
       <span class="tot num ${dayTrades.length?cls(net):''}">${dayTrades.length? dayTrades.length+" trade"+(dayTrades.length>1?"s":"")+" · "+signed(net)+" net" : "no trades yet"}</span>
     </div>
     <div class="jdoc">${empty}${blocks}
@@ -898,6 +926,14 @@ function viewJournal(){
         <button data-jadd="trade"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18l6-6 4 4 6-8"/></svg>Trade</button>
       </div>
     </div>`;
+}
+function clearPractice(){
+  const ids=new Set(state.trades.filter(t=>t.practice).map(t=>t.id));
+  if(!ids.size){ toast("Nothing to clear"); return; }
+  if(!confirm(`Clear ${ids.size} practice entr${ids.size>1?"ies":"y"} and this whole sandbox? This can't be undone.`)) return;
+  state.trades=state.trades.filter(t=>!t.practice);
+  delete state.days[PRACTICE_DAY];
+  persist(); render();
 }
 function renderBlock(b){
   if(b.type==="text"){
@@ -910,8 +946,8 @@ function renderBlock(b){
   }
   if(b.type==="trade"){
     const t=tradeById(b.tradeId); if(!t) return "";
-    return `<div class="jblock" data-bid="${b.id}"><div class="jtstrip" data-tid="${t.id}">
-      <span class="tnum">${tradeNumber(t.id)}</span>
+    return `<div class="jblock" data-bid="${b.id}"><div class="jtstrip${t.practice?' prac':''}" data-tid="${t.id}">
+      <span class="tnum">${t.practice?'<span class="prac-tag">PRACTICE</span>':tradeNumber(t.id)}</span>
       <input class="ti time" data-f="time" placeholder="9:34" value="${escapeHtml(t.time||"")}">
       <select class="ti wl" data-f="outcome">${opt(["WIN","LOSS"],t.outcome)}</select>
       <input class="ti pnl num" data-f="pnl" inputmode="decimal" placeholder="$ PnL" value="${t.pnl!=null?t.pnl:""}">
@@ -920,7 +956,7 @@ function renderBlock(b){
       <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
       <input class="ti dur" data-f="duration" placeholder="dur" value="${escapeHtml(t.duration||"")}">
       <select class="ti strat" data-f="strategy"><option value="" ${!stratMeta(t.strategy)?"selected":""}>None</option>${strategies().map(s=>`<option value="${s.name}" ${t.strategy===s.name?"selected":""}>${s.name.replace("Strategy ","")}</option>`).join("")}</select>
-      <select class="ti acct" data-f="acct">${accounts().map(a=>`<option value="${a.id}" ${t.accts[a.id]?"selected":""}>${a.name}</option>`).join("")}</select>
+      <select class="ti acct" data-f="acct"><option value="" ${Object.keys(t.accts||{}).length===0?"selected":""}>—</option>${accounts().map(a=>`<option value="${a.id}" ${t.accts[a.id]?"selected":""}>${a.name}</option>`).join("")}</select>
       <select class="ti emo" data-f="emoji">${["",...EMOJIS].map(e=>`<option ${t.emoji===e?"selected":""}>${e||"·"}</option>`).join("")}</select>
       <button class="del" data-tdel="${t.id}" data-tbid="${b.id}">🗑</button>
     </div></div>`;
@@ -943,7 +979,7 @@ function editStrip(tid, field, el){
   else if(field==="dir") t.dir=el.value;
   else if(field==="immediate") t.immediate=el.checked;
   else if(field==="emoji") t.emoji=(el.value==="·"?"":el.value);
-  else if(field==="acct"){ t.accts={}; t.accts[el.value]=true; }
+  else if(field==="acct"){ t.accts={}; if(el.value) t.accts[el.value]=true; }
   else if(field==="strategy"){ t.strategy=el.value; }
   else if(field==="qty"){ t.contracts=Math.max(1,parseInt(el.value)||1); if(t.pnl!=null) t.points=t.pnl/((t.contracts||1)*MULT); }
   else if(field==="pnl"){
@@ -1195,9 +1231,12 @@ function bindViewEvents(){
   $$("#view [data-jnav]").forEach(b=>b.onclick=()=>{
     const v=b.dataset.jnav;
     if(v==="today") state.ui.jDate=iso(new Date());
+    else if(v==="practice") state.ui.jDate=PRACTICE_DAY;
+    else if(v==="exit-practice") state.ui.jDate=iso(new Date());
     else{ const dt=parseISO(jDate()); dt.setDate(dt.getDate()+Number(v)); state.ui.jDate=iso(dt); }
     persist(); render();
   });
+  $$("#view [data-prac-clear]").forEach(b=>b.onclick=()=>clearPractice());
   $$("#view [data-jadd]").forEach(b=>b.onclick=()=>jAdd(b.dataset.jadd));
   $$("#view [data-bdel]").forEach(b=>b.onclick=()=>jDelBlock(b.dataset.bdel));
   $$("#view [data-bimg]").forEach(im=>im.addEventListener("click",()=>openLightbox(im.src)));
