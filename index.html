@@ -451,22 +451,24 @@ const HUE = {blue:"#529bff", green:"#4dd58a", red:"#ff6b6b", purple:"#b483e8", o
 const DEFAULT_ACCOUNTS=[
   {id:"ts1",  name:"TopStep #1", provider:"topstep", type:"50K Combine", size:50000, maxDD:2000, target:3000, phase:"eval", rt:1.22, color:HUE.blue,   cls:"blue"},
   {id:"ts2",  name:"TopStep #2", provider:"topstep", type:"50K Combine", size:50000, maxDD:2000, target:3000, phase:"eval", rt:1.22, color:HUE.purple, cls:"purple"},
-  {id:"apex", name:"Apex #1",    provider:"apex",    type:"25K Intraday", size:25000, maxDD:1000, target:1500, phase:"eval", rt:1.04, color:HUE.orange, cls:"orange"},
+  {id:"apex", name:"Apex #1",    provider:"apex",    type:"Legacy 25K",   size:25000, maxDD:1500, target:1500, phase:"eval", rt:1.04, color:HUE.orange, cls:"orange"},
 ];
 function accounts(){ const a=state.settings&&state.settings.accounts; return (Array.isArray(a)&&a.length)?a:DEFAULT_ACCOUNTS; }
 function acct(id){ return accounts().find(a=>a.id===id)||null; }
 function acctColorFor(){ const used=new Set(accounts().map(a=>a.cls)); return STRAT_PALETTE.find(p=>!used.has(p.cls))||STRAT_PALETTE[accounts().length%STRAT_PALETTE.length]; }
 function migrateAccounts(){
   const s=state.settings, acc=s.accounts;
-  if(Array.isArray(acc)&&acc.length&&acc[0]&&acc[0].id){ acc.forEach(a=>{ if(!a.phase)a.phase="eval"; if(a.rt==null)a.rt=(a.provider==="apex"?1.04:1.22); if(!a.color){const c=acctColorFor();a.color=c.hue;a.cls=c.cls;} }); return; }
+  const fixApex=a=>{ if(a.provider==="apex"&&Number(a.size)===50000&&Number(a.maxDD)===2500){ a.size=25000; a.maxDD=1500; a.type="Legacy 25K"; } };
+  if(Array.isArray(acc)&&acc.length&&acc[0]&&acc[0].id){ acc.forEach(a=>{ if(!a.phase)a.phase="eval"; if(a.rt==null)a.rt=(a.provider==="apex"?1.04:1.22); if(!a.color){const c=acctColorFor();a.color=c.hue;a.cls=c.cls;} fixApex(a); }); return; }
   if(!acc||(typeof acc==="object"&&!Object.keys(acc).length)){ s.accounts=JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)); return; }
   const meta={ts1:{name:"TopStep #1",provider:"topstep",type:"50K Combine",rt:1.22,color:HUE.blue,cls:"blue"},
               ts2:{name:"TopStep #2",provider:"topstep",type:"50K Combine",rt:1.22,color:HUE.purple,cls:"purple"},
-              apex:{name:"Apex #1",provider:"apex",type:"25K Intraday",rt:1.04,color:HUE.orange,cls:"orange"}};
+              apex:{name:"Apex #1",provider:"apex",type:"Legacy 25K",rt:1.04,color:HUE.orange,cls:"orange"}};
   const arr=[];
   ["ts1","ts2","apex"].forEach(id=>{ if(!acc[id])return; const o=acc[id], m=meta[id];
     const ph=(o.phase==="Funded"||o.phase==="PA")?"funded":"eval";
-    arr.push({id,name:m.name,provider:m.provider,type:m.type,size:Number(o.size)||(id==="apex"?25000:50000),maxDD:Number(o.maxDD)||(id==="apex"?1000:2000),target:Number(o.target)||3000,phase:ph,rt:m.rt,color:m.color,cls:m.cls}); });
+    const a={id,name:m.name,provider:m.provider,type:m.type,size:Number(o.size)||(id==="apex"?25000:50000),maxDD:Number(o.maxDD)||(id==="apex"?1500:2000),target:Number(o.target)||3000,phase:ph,rt:m.rt,color:m.color,cls:m.cls};
+    fixApex(a); arr.push(a); });
   s.accounts=arr.length?arr:JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS));
 }
 function addTopstep(){
@@ -475,9 +477,11 @@ function addTopstep(){
   state.settings.accounts=list; persist(); render();
 }
 function addApex(){
-  const legacy=!confirm("Apex account type:\n\nOK = 25K Eval (current)\nCancel = Legacy 25K Eval");
-  const list=accounts().slice(), n=list.filter(a=>a.provider==="apex").length+1, c=acctColorFor();
-  list.push({id:"acc"+Date.now().toString(36),name:"Apex #"+n,provider:"apex",type:legacy?"Legacy 25K Eval":"25K Intraday",size:25000,maxDD:legacy?1500:1000,target:1500,phase:"eval",rt:1.04,color:c.hue,cls:c.cls});
+  const c=prompt("Apex account type:\n\n1 = Legacy 25K   ($1,500 trailing floor)\n2 = 25K Intraday ($1,000 trailing floor)\n\n(Cancel to not add)","1");
+  if(c===null) return;
+  const legacy=String(c).trim()!=="2";
+  const list=accounts().slice(), n=list.filter(a=>a.provider==="apex").length+1, col=acctColorFor();
+  list.push({id:"acc"+Date.now().toString(36),name:"Apex #"+n,provider:"apex",type:legacy?"Legacy 25K":"25K Intraday",size:25000,maxDD:legacy?1500:1000,target:1500,phase:"eval",rt:1.04,color:col.hue,cls:col.cls});
   state.settings.accounts=list; persist(); render();
 }
 function deleteAccount(id){
@@ -489,14 +493,15 @@ function deleteAccount(id){
 function accountStats(id){
   const a=acct(id)||{size:0,maxDD:0,target:0,phase:"eval"};
   const size=Number(a.size)||0, maxDD=Number(a.maxDD)||0, target=Number(a.target)||0;
+  const startBalance=(Number(a.startBalance)>0)?Number(a.startBalance):size;
   const funded=a.phase==="funded", goal=funded?(maxDD+(a.provider==="apex"?100:0)):target;
-  let run=0,peak=0;
-  sortedTrades().forEach(t=>{ run+=acctPnl(t,id)-acctComm(t,id); if(run>peak)peak=run; });
-  const net=run, balance=size+net, peakBalance=size+Math.max(0,peak);
+  let bal=startBalance, peak=Math.max(size,startBalance);
+  sortedTrades().forEach(t=>{ bal+=acctPnl(t,id)-acctComm(t,id); if(bal>peak)peak=bal; });
+  const balance=bal, net=balance-size, peakBalance=peak;
   const ddFloor=peakBalance-maxDD, ddRemaining=balance-ddFloor;
   const ddRemPct=maxDD>0?Math.min(100,Math.max(0,ddRemaining/maxDD*100)):0;
   const goalPct=goal>0?Math.max(0,net/goal*100):0;
-  return {a,size,maxDD,target,goal,funded,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,goalPct,hit:goal>0&&net>=goal};
+  return {a,size,maxDD,target,goal,funded,startBalance,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,goalPct,hit:goal>0&&net>=goal};
 }
 function accountCard(a){
   const s=accountStats(a.id), gpct=Math.min(100,s.goalPct);
@@ -519,8 +524,9 @@ function accountCard(a){
       <span class="av num">${s.hit?"✓ reached":money(remain)+" to go"}</span></div>
     <div class="acfg">
       <label>Size<input class="ci num" data-acfg="${a.id}" data-fld="size" inputmode="numeric" value="${s.size}"></label>
+      <label>Start bal<input class="ci num" data-acfg="${a.id}" data-fld="startBalance" inputmode="numeric" value="${Math.round(s.startBalance)}"></label>
       <label>Max DD<input class="ci num" data-acfg="${a.id}" data-fld="maxDD" inputmode="numeric" value="${s.maxDD}"></label>
-      <label>${s.funded?"Target*":"Target"}<input class="ci num" data-acfg="${a.id}" data-fld="target" inputmode="numeric" value="${s.target}"></label>
+      <label>Target<input class="ci num" data-acfg="${a.id}" data-fld="target" inputmode="numeric" value="${s.target}"></label>
     </div></div>`;
 }
 const DEFAULT_STRATEGIES=[
@@ -1069,25 +1075,26 @@ function equityLine(){
   </svg></div>`;
 }
 function viewChart(){
-  if(!state.trades.length) return emptyState();
   const s=stats();
+  const single=curAcct()!=="all", as=single?accountStats(curAcct()):null;
+  const accts=`<div class="accts-h"><span class="accts-t">Accounts <span style="color:var(--text-faint)">${accounts().length}</span></span><span class="accts-add"><button data-acct-add="topstep">+ TopStep</button><button data-acct-add="apex">+ Apex</button></span></div><div class="accts">`+accounts().map(accountCard).join("")+`</div>`;
+  if(!state.trades.length) return `<div class="dash">${accts}<div class="panel" style="text-align:center;color:var(--text-dim);padding:26px 18px">No trades logged yet — your accounts are set up above. Add or remove accounts, set a <b>Start bal</b> for any trades you didn't journal, then log trades in the Journal.</div></div>`;
   const rings=`<div class="rings">
     ${ring(s.winRate, HUE.green, s.winRate+"%","Win rate")}
     ${ring(100, HUE.purple, moneyK(s.net),"Net P&L")}
     ${ring(s.lossRate, HUE.red, s.lossRate+"%","Loss rate")}
     ${ring(s.rulesRate, HUE.blue, s.rulesRate+"%","Rules followed")}
   </div>`;
-  const accts=`<div class="accts-h"><span class="accts-t">Accounts <span style="color:var(--text-faint)">${accounts().length}</span></span><span class="accts-add"><button data-acct-add="topstep">+ TopStep</button><button data-acct-add="apex">+ Apex</button></span></div><div class="accts">`+accounts().map(accountCard).join("")+`</div>`;
   const stratData=strategies().map(st=>({label:st.name.replace("Strategy ",""),value:s.byStrat[st.name]||0,color:st.hue}));
   const dayData=withEquity().map(d=>({label:parseISO(d.t.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}),value:totalPnl(d.t)}));
   const S=(k,v,c="")=>`<div class="statcell"><div class="k">${k}</div><div class="val num ${c}">${v}</div></div>`;
-  const perf=`<div class="panel"><h3>◔ Performance</h3><div class="statgrid">
-    ${S("Account size",money(s.cap))}
-    ${S("Current balance",money(s.currentBalance))}
+  const perf=`<div class="panel"><h3>◔ Performance <span style="color:var(--text-faint);font-weight:400;font-size:12px">· ${single?acctLabel(curAcct()):"all accounts — trading stats only"}</span></h3><div class="statgrid">
+    ${single?S("Account size",money(as.size)):""}
+    ${single?S("Current balance",money(as.balance)):""}
+    ${S("Net P&L",money(s.net),cls(s.net))}
     ${S("Gross P&L",money(s.gross),cls(s.gross))}
     ${S("Fees & comm",s.comm?money(-s.comm):"$0",s.comm?"neg":"")}
-    ${S("Net P&L",money(s.net),cls(s.net))}
-    ${S("Total return",fmtPct(s.totalReturn),cls(s.totalReturn))}
+    ${single?S("Total return",fmtPct(as.size>0?as.net/as.size*100:0),cls(as.net)):""}
     ${S("Trades",s.n)}
     ${S("Win rate",s.winRate+"%")}
     ${S("Expectancy",s.expectancyR?s.expectancyR.toFixed(2)+"R":"—",cls(s.expectancyR))}
@@ -1173,8 +1180,9 @@ function bindViewEvents(){
     state.ui.jDate=c.dataset.date; state.ui.tab="journal"; persist(); renderTabs(); render();
   }));
   $$("#view [data-acfg]").forEach(el=>el.addEventListener("change",()=>{
-    const a=acct(el.dataset.acfg), f=el.dataset.fld; if(!a) return;
-    a[f]=(f==="phase")?el.value:(Number(el.value)||0);
+    const id=el.dataset.acfg, f=el.dataset.fld;
+    const v=(f==="phase")?el.value:(Number(el.value)||0);
+    state.settings.accounts=accounts().map(a=>a.id===id?Object.assign({},a,{[f]:v}):a);
     persist(); render();
   }));
   $$("#view [data-acct-add]").forEach(b=>b.onclick=()=>b.dataset.acctAdd==="apex"?addApex():addTopstep());
