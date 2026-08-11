@@ -308,6 +308,9 @@ svg.line{width:100%;height:auto;max-height:340px;display:block}
 .jtstrip{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px 9px;border-radius:9px;
   background:var(--bg-elev);border:1px solid var(--line-soft);font-size:12.5px}
 .jtstrip .tnum{color:var(--text-faint);font-weight:700;min-width:26px;text-align:center}
+.jtstrip .tdelta{font-size:11px;font-weight:700;white-space:nowrap;min-width:70px}
+.jtstrip .tdelta.muted{color:var(--text-faint);font-weight:400}
+.jtstrip .runpnl{max-width:92px}
 .jtstrip.prac{border-color:rgba(228,151,198,.5);background:rgba(228,151,198,.06)}
 .prac-tag{font-size:8.5px;font-weight:700;letter-spacing:.5px;color:#e491c6;background:rgba(228,151,198,.16);padding:2px 5px;border-radius:4px}
 .pracbar{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
@@ -501,15 +504,14 @@ function deleteAccount(id){
 function accountStats(id){
   const a=acct(id)||{size:0,maxDD:0,target:0,phase:"eval"};
   const size=Number(a.size)||0, maxDD=Number(a.maxDD)||0, target=Number(a.target)||0;
-  const startBalance=(Number(a.startBalance)>0)?Number(a.startBalance):size;
   const funded=a.phase==="funded", goal=funded?(maxDD+(a.provider==="apex"?100:0)):target;
-  let bal=startBalance, peak=Math.max(size,startBalance);
+  let bal=size, peak=size;
   sortedTrades().forEach(t=>{ bal+=acctPnl(t,id)-acctComm(t,id); if(bal>peak)peak=bal; });
   const balance=bal, net=balance-size, peakBalance=peak;
   const ddFloor=peakBalance-maxDD, ddRemaining=balance-ddFloor;
   const ddRemPct=maxDD>0?Math.min(100,Math.max(0,ddRemaining/maxDD*100)):0;
   const goalPct=goal>0?Math.max(0,net/goal*100):0;
-  return {a,size,maxDD,target,goal,funded,startBalance,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,goalPct,hit:goal>0&&net>=goal};
+  return {a,size,maxDD,target,goal,funded,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,goalPct,hit:goal>0&&net>=goal};
 }
 function accountCard(a){
   const s=accountStats(a.id), gpct=Math.min(100,s.goalPct);
@@ -532,7 +534,6 @@ function accountCard(a){
       <span class="av num">${s.hit?"✓ reached":money(remain)+" to go"}</span></div>
     <div class="acfg">
       <label>Size<input class="ci num" data-acfg="${a.id}" data-fld="size" inputmode="numeric" value="${s.size}"></label>
-      <label>Start bal<input class="ci num" data-acfg="${a.id}" data-fld="startBalance" inputmode="numeric" value="${Math.round(s.startBalance)}"></label>
       <label>Max DD<input class="ci num" data-acfg="${a.id}" data-fld="maxDD" inputmode="numeric" value="${s.maxDD}"></label>
       <label>Target<input class="ci num" data-acfg="${a.id}" data-fld="target" inputmode="numeric" value="${s.target}"></label>
     </div></div>`;
@@ -570,15 +571,36 @@ function fmtDateLong(s){ const d=parseISO(s);
 
 /* ================= derived math ================= */
 function acctContracts(t,k){ const o=t.ov&&t.ov[k]; return (o!=null&&o!=="")?Number(o):Number(t.contracts||0); }
-function acctPnl(t,k){ return t.accts[k] ? Number(t.points||0)*acctContracts(t,k)*MULT : 0; }
+/* Per-trade P&L = the account's running P&L on this trade minus its running P&L on the previous trade of the SAME account.
+   The user journals only the running (cumulative) broker number; the individual trade amount is derived. */
+function acctPnl(t,k){
+  if(!t.accts[k]) return 0;
+  const onK=sortedTrades().filter(x=>x.accts[k]);
+  const i=onK.findIndex(x=>x.id===t.id); if(i<0) return 0;
+  const cur=Number(t.runPnl)||0, prev=i>0?(Number(onK[i-1].runPnl)||0):0;
+  return cur-prev;
+}
 function totalPnl(t){ return accounts().reduce((s,a)=>s+acctPnl(t,a.id),0); }
 function acctComm(t,k){
   if(!t.accts[k]) return 0;
   if(t.imported) return (Number(t.fees)||0)+(Number(t.comm)||0); // real cost from the export (per trade)
-  return ((acct(k)||{}).rt||0) * acctContracts(t,k);  // round-turn × contracts
+  return (acct(k)||{}).rt||0;  // one round-turn per trade — contract count is a note, not a multiplier
 }
 function tradeComm(t){ return accounts().reduce((s,a)=>s+acctComm(t,a.id),0); }
 function tradeNet(t){ return totalPnl(t)-tradeComm(t); }
+function tradeOutcome(t){ return tradeNet(t)>=0?"WIN":"LOSS"; }
+function migratePnl(){
+  // one-time: legacy trades stored a per-trade pnl; convert to running per-account totals
+  if(!state.trades.some(t=>t.runPnl==null && t.pnl!=null)) return;
+  const run={};
+  [...state.trades].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq)).forEach(t=>{
+    if(t.runPnl!=null) return;
+    const k=Object.keys(t.accts||{}).find(id=>t.accts[id]);
+    if(!k || t.pnl==null) return;
+    run[k]=(run[k]||0)+(Number(t.pnl)||0);
+    t.runPnl=run[k];
+  });
+}
 const PRACTICE_DAY="__practice__";
 function sortedTrades(){
   return [...state.trades].filter(t=>!t.practice).sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq));
@@ -706,7 +728,7 @@ function tradeCard(t){
   return `<div class="tcard" data-id="${t.id}">
     ${media}
     <div class="tcbd">
-      <div class="tcr"><span class="tcname">MNQ</span>${outcomePill(t.outcome)}<span class="num ${cls(tp)}" style="margin-left:auto;font-weight:600;font-size:13px">${money(tp)}</span></div>
+      <div class="tcr"><span class="tcname">MNQ</span>${outcomePill(tradeOutcome(t))}<span class="num ${cls(tp)}" style="margin-left:auto;font-weight:600;font-size:13px">${money(tp)}</span></div>
       <div class="tcr"><span class="tcdate">${fmtDateLong(t.date)}</span>${t.emoji?`<span style="margin-left:auto;font-size:14px">${t.emoji}</span>`:''}</div>
       <div class="tcr">${stratPill(t.strategy)}${t.time?`<span style="margin-left:auto;color:var(--text-faint);font-size:11px">${t.time}</span>`:''}</div>
     </div></div>`;
@@ -733,7 +755,7 @@ function viewList(){
     return `<tr data-id="${t.id}">
       <td class="num" style="text-align:right;color:var(--text-faint)">${tradeNumber(t.id)}</td>
       <td class="num" style="color:var(--text-mid)">${t.time||"—"}</td>
-      <td>${outcomePill(t.outcome)}</td>
+      <td>${outcomePill(tradeOutcome(t))}</td>
       <td style="text-align:right"><span class="lpnl">${miniRing(tp,maxAbs)}<span class="num ${cls(tp)}" style="font-weight:600">${money(tp)}</span></span></td>
       <td style="text-align:center">${t.immediate?'<span class="check-ok">✓</span>':'<span class="check-no">—</span>'}</td>
       <td>${dirPill(t.dir)}</td>
@@ -762,7 +784,7 @@ function board(groups){
 }
 function viewWins(){
   if(!state.trades.length) return emptyState();
-  const g=o=>({head:outcomePill(o),items:visibleTrades().filter(t=>t.outcome===o)});
+  const g=o=>({head:outcomePill(o),items:visibleTrades().filter(t=>tradeOutcome(t)===o)});
   return board([g("WIN"),g("LOSS")]);
 }
 function viewStrategy(){
@@ -882,9 +904,9 @@ function allImageBlocks(){
 function newJournalTrade(date){
   const practice=(date===PRACTICE_DAY);
   return { id:"t"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), seq:state.trades.length,
-    date, dir:"Long", outcome:"WIN", strategy:"", contracts:1, points:0,
+    date, dir:"Long", strategy:"", contracts:1,
     accts: practice?{}:(function(){var o={},f=accounts()[0];if(f)o[f.id]=true;return o;})(), ov:{}, rules:true, notes:"",
-    pnl:null, time:"", duration:"", immediate:false, emoji:"", images:[], practice };
+    runPnl:null, time:"", duration:"", immediate:false, emoji:"", images:[], practice };
 }
 
 function viewJournal(){
@@ -946,12 +968,13 @@ function renderBlock(b){
   }
   if(b.type==="trade"){
     const t=tradeById(b.tradeId); if(!t) return "";
+    const hasP=(t.runPnl!=null&&t.runPnl!==""), net=hasP?tradeNet(t):null, oc=hasP?tradeOutcome(t):null;
     return `<div class="jblock" data-bid="${b.id}"><div class="jtstrip${t.practice?' prac':''}" data-tid="${t.id}">
       <span class="tnum">${t.practice?'<span class="prac-tag">PRACTICE</span>':tradeNumber(t.id)}</span>
       <input class="ti time" data-f="time" placeholder="9:34" value="${escapeHtml(t.time||"")}">
-      <select class="ti wl" data-f="outcome">${opt(["WIN","LOSS"],t.outcome)}</select>
-      <input class="ti pnl num" data-f="pnl" inputmode="decimal" placeholder="$ PnL" value="${t.pnl!=null?t.pnl:""}">
-      <input class="ti qty num" data-f="qty" inputmode="numeric" placeholder="×1" value="${t.contracts||1}" title="Contracts">
+      <input class="ti runpnl num" data-f="runpnl" inputmode="decimal" placeholder="acct P&L" title="Your account's running P&L after this trade — the number on your broker screen" value="${hasP?t.runPnl:""}">
+      <span class="tdelta ${net==null?'muted':cls(net)}" title="This trade, net of commission (derived)">${net==null?"— this trade":(oc==="WIN"?"W ":"L ")+signed(net)}</span>
+      <input class="ti qty num" data-f="qty" inputmode="numeric" placeholder="×1" value="${t.contracts||1}" title="Contracts — a note only; doesn't affect P&L">
       <label class="imm" title="Went my way immediately"><input type="checkbox" data-f="immediate" ${t.immediate?"checked":""}> →</label>
       <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
       <input class="ti dur" data-f="duration" placeholder="dur" value="${escapeHtml(t.duration||"")}">
@@ -973,21 +996,18 @@ function jAdd(kind){
 }
 function editStrip(tid, field, el){
   const t=tradeById(tid); if(!t) return;
+  let reflow=false;
   if(field==="time") t.time=el.value;
   else if(field==="duration") t.duration=el.value;
-  else if(field==="outcome") t.outcome=el.value;
   else if(field==="dir") t.dir=el.value;
   else if(field==="immediate") t.immediate=el.checked;
   else if(field==="emoji") t.emoji=(el.value==="·"?"":el.value);
-  else if(field==="acct"){ t.accts={}; if(el.value) t.accts[el.value]=true; }
+  else if(field==="acct"){ t.accts={}; if(el.value) t.accts[el.value]=true; reflow=true; }
   else if(field==="strategy"){ t.strategy=el.value; }
-  else if(field==="qty"){ t.contracts=Math.max(1,parseInt(el.value)||1); if(t.pnl!=null) t.points=t.pnl/((t.contracts||1)*MULT); }
-  else if(field==="pnl"){
-    const v=parseFloat(el.value); const c=Number(t.contracts)||1;
-    t.pnl=isNaN(v)?null:v; t.points=isNaN(v)?0:(v/(c*MULT));
-    if(!isNaN(v)&&v!==0){ t.outcome=v>0?"WIN":"LOSS"; const wl=el.closest(".jtstrip").querySelector('[data-f="outcome"]'); if(wl)wl.value=t.outcome; }
-  }
-  persist(); // no re-render: keeps focus while editing
+  else if(field==="qty"){ t.contracts=Math.max(1,parseInt(el.value)||1); }
+  else if(field==="runpnl"){ const v=parseFloat(el.value); t.runPnl=(isNaN(v)?null:v); reflow=true; }
+  persist();
+  if(reflow) render(); // running P&L / account change ripples into other trades' deltas + the dashboard
 }
 function jDelBlock(bid){ const d=state.days[jDate()]; if(!d)return; d.blocks=(d.blocks||[]).filter(b=>b.id!==bid); persist(); render(); }
 function jDelTrade(tid,bid){ state.trades=state.trades.filter(t=>t.id!==tid);
@@ -1017,8 +1037,8 @@ function syncTradeBlocks(){
 /* ================= stats ================= */
 function stats(){
   const ts=visibleTrades(), n=ts.length;
-  const wins=ts.filter(t=>t.outcome==="WIN").length;
-  const losses=ts.filter(t=>t.outcome==="LOSS").length;
+  const wins=ts.filter(t=>tradeOutcome(t)==="WIN").length;
+  const losses=ts.filter(t=>tradeOutcome(t)==="LOSS").length;
   const rules=ts.filter(t=>t.rules).length;
   const byAcct={}, byAcctNet={}; accounts().forEach(a=>{byAcct[a.id]=0;byAcctNet[a.id]=0;}); let gross=0, comm=0;
   ts.forEach(t=>{ accounts().forEach(a=>{ byAcct[a.id]+=acctPnl(t,a.id); byAcctNet[a.id]+=acctPnl(t,a.id)-acctComm(t,a.id); }); gross+=vPnl(t); comm+=vComm(t); });
@@ -1246,7 +1266,7 @@ function bindViewEvents(){
   $$("#view .jtstrip").forEach(strip=>{
     const tid=strip.dataset.tid;
     strip.querySelectorAll("[data-f]").forEach(el=>{
-      const ev=(el.type==="checkbox"||el.tagName==="SELECT")?"change":"input";
+      const ev=(el.type==="checkbox"||el.tagName==="SELECT"||el.dataset.f==="runpnl")?"change":"input";
       el.addEventListener(ev,()=>editStrip(tid,el.dataset.f,el));
     });
     const del=strip.querySelector("[data-tdel]");
@@ -1305,7 +1325,7 @@ $("#import-file").addEventListener("change",e=>{
   const rd=new FileReader();
   rd.onload=()=>{ try{ const data=JSON.parse(rd.result);
     if(data&&Array.isArray(data.trades)){ state=Object.assign(state,data); state.ui=state.ui||{tab:"chart",calY:2026,calM:1};
-      state.settings=state.settings||{}; migrateAccounts();
+      state.settings=state.settings||{}; migrateAccounts(); migratePnl();
       if(!Array.isArray(state.settings.strategies)||!state.settings.strategies.length) state.settings.strategies=JSON.parse(JSON.stringify(DEFAULT_STRATEGIES));
       state.days=state.days||{}; migrateToDays(); syncTradeBlocks(); state.ui.jDate=state.ui.jDate||iso(new Date());
       persist(); renderTabs(); render(); toast("Backup restored"); }
@@ -1322,6 +1342,7 @@ $("#import-file").addEventListener("change",e=>{
     state.settings=Object.assign({lastContracts:4,startingCapital:150000}, saved.settings||{}); }
   else{ state.trades=sample(); }
   migrateAccounts();
+  migratePnl();
   if(!Array.isArray(state.settings.strategies)||!state.settings.strategies.length) state.settings.strategies=JSON.parse(JSON.stringify(DEFAULT_STRATEGIES));
   state.days=state.days||{};
   migrateToDays();
