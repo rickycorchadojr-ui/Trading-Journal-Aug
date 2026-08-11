@@ -504,14 +504,15 @@ function deleteAccount(id){
 function accountStats(id){
   const a=acct(id)||{size:0,maxDD:0,target:0,phase:"eval"};
   const size=Number(a.size)||0, maxDD=Number(a.maxDD)||0, target=Number(a.target)||0;
+  const startBalance=(Number(a.startBalance)>0)?Number(a.startBalance):size;
   const funded=a.phase==="funded", goal=funded?(maxDD+(a.provider==="apex"?100:0)):target;
-  let bal=size, peak=size;
+  let bal=startBalance, peak=Math.max(size,startBalance);
   sortedTrades().forEach(t=>{ bal+=acctPnl(t,id)-acctComm(t,id); if(bal>peak)peak=bal; });
   const balance=bal, net=balance-size, peakBalance=peak;
   const ddFloor=peakBalance-maxDD, ddRemaining=balance-ddFloor;
   const ddRemPct=maxDD>0?Math.min(100,Math.max(0,ddRemaining/maxDD*100)):0;
   const goalPct=goal>0?Math.max(0,net/goal*100):0;
-  return {a,size,maxDD,target,goal,funded,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,goalPct,hit:goal>0&&net>=goal};
+  return {a,size,maxDD,target,goal,funded,startBalance,net,balance,peakBalance,ddFloor,ddRemaining,ddRemPct,goalPct,hit:goal>0&&net>=goal};
 }
 function accountCard(a){
   const s=accountStats(a.id), gpct=Math.min(100,s.goalPct);
@@ -534,6 +535,7 @@ function accountCard(a){
       <span class="av num">${s.hit?"✓ reached":money(remain)+" to go"}</span></div>
     <div class="acfg">
       <label>Size<input class="ci num" data-acfg="${a.id}" data-fld="size" inputmode="numeric" value="${s.size}"></label>
+      <label>Start bal<input class="ci num" data-acfg="${a.id}" data-fld="startBalance" inputmode="numeric" value="${Math.round(s.startBalance)}"></label>
       <label>Max DD<input class="ci num" data-acfg="${a.id}" data-fld="maxDD" inputmode="numeric" value="${s.maxDD}"></label>
       <label>Target<input class="ci num" data-acfg="${a.id}" data-fld="target" inputmode="numeric" value="${s.target}"></label>
     </div></div>`;
