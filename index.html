@@ -535,7 +535,7 @@ function accountCard(a){
       <span class="av num">${s.hit?"✓ reached":money(remain)+" to go"}</span></div>
     <div class="acfg">
       <label>Size<input class="ci num" data-acfg="${a.id}" data-fld="size" inputmode="numeric" value="${s.size}"></label>
-      <label>Start bal<input class="ci num" data-acfg="${a.id}" data-fld="startBalance" inputmode="numeric" value="${Math.round(s.startBalance)}"></label>
+      <label>Start bal<input class="ci num" data-acfg="${a.id}" data-fld="startBalance" inputmode="decimal" value="${s.startBalance}"></label>
       <label>Max DD<input class="ci num" data-acfg="${a.id}" data-fld="maxDD" inputmode="numeric" value="${s.maxDD}"></label>
       <label>Target<input class="ci num" data-acfg="${a.id}" data-fld="target" inputmode="numeric" value="${s.target}"></label>
     </div></div>`;
@@ -584,9 +584,10 @@ function acctPnl(t,k){
 }
 function totalPnl(t){ return accounts().reduce((s,a)=>s+acctPnl(t,a.id),0); }
 function acctComm(t,k){
-  if(!t.accts[k]) return 0;
-  if(t.imported) return (Number(t.fees)||0)+(Number(t.comm)||0); // real cost from the export (per trade)
-  return (acct(k)||{}).rt||0;  // one round-turn per trade — contract count is a note, not a multiplier
+  // The running P&L you enter is read straight off the broker, which already deducts
+  // commissions at each exit — so there is nothing to subtract here. Kept as 0 so the
+  // journal mirrors your account's real net exactly.
+  return 0;
 }
 function tradeComm(t){ return accounts().reduce((s,a)=>s+acctComm(t,a.id),0); }
 function tradeNet(t){ return totalPnl(t)-tradeComm(t); }
@@ -975,7 +976,7 @@ function renderBlock(b){
       <span class="tnum">${t.practice?'<span class="prac-tag">PRACTICE</span>':tradeNumber(t.id)}</span>
       <input class="ti time" data-f="time" placeholder="9:34" value="${escapeHtml(t.time||"")}">
       <input class="ti runpnl num" data-f="runpnl" inputmode="decimal" placeholder="acct P&L" title="Your account's running P&L after this trade — the number on your broker screen" value="${hasP?t.runPnl:""}">
-      <span class="tdelta ${net==null?'muted':cls(net)}" title="This trade, net of commission (derived)">${net==null?"— this trade":(oc==="WIN"?"W ":"L ")+signed(net)}</span>
+      <span class="tdelta ${net==null?'muted':cls(net)}" title="This trade's P&L — the change from the previous trade's running total on this account">${net==null?"— this trade":(oc==="WIN"?"W ":"L ")+signed(net)}</span>
       <input class="ti qty num" data-f="qty" inputmode="numeric" placeholder="×1" value="${t.contracts||1}" title="Contracts — a note only; doesn't affect P&L">
       <label class="imm" title="Went my way immediately"><input type="checkbox" data-f="immediate" ${t.immediate?"checked":""}> →</label>
       <select class="ti ls" data-f="dir">${opt(["Long","Short"],t.dir)}</select>
