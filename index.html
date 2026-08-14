@@ -574,10 +574,12 @@ function fmtDateLong(s){ const d=parseISO(s);
 /* ================= derived math ================= */
 function acctContracts(t,k){ const o=t.ov&&t.ov[k]; return (o!=null&&o!=="")?Number(o):Number(t.contracts||0); }
 /* Per-trade P&L = the account's running P&L on this trade minus its running P&L on the previous trade of the SAME account.
-   The user journals only the running (cumulative) broker number; the individual trade amount is derived. */
+   The broker's session P&L resets to 0 each trading day, so a trade's result is measured against
+   the previous trade on the SAME account AND SAME day (0 for that day's first trade). Each day's
+   session net then adds onto the account total. */
 function acctPnl(t,k){
   if(!t.accts[k]) return 0;
-  const onK=sortedTrades().filter(x=>x.accts[k]);
+  const onK=sortedTrades().filter(x=>x.accts[k] && x.date===t.date);
   const i=onK.findIndex(x=>x.id===t.id); if(i<0) return 0;
   const cur=Number(t.runPnl)||0, prev=i>0?(Number(onK[i-1].runPnl)||0):0;
   return cur-prev;
