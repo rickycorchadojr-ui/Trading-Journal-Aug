@@ -608,7 +608,12 @@ function migratePnl(){
 }
 const PRACTICE_DAY="__practice__";
 function sortedTrades(){
-  return [...state.trades].filter(t=>!t.practice).sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:(a.seq-b.seq));
+  // Within a day, order by the trade's position in that day's journal document — the order you
+  // actually see and control — not the global creation-sequence, which can collide after deletes.
+  const bi={};
+  Object.keys(state.days||{}).forEach(date=>{ (state.days[date].blocks||[]).forEach((b,i)=>{ if(b.type==="trade") bi[b.tradeId]=i; }); });
+  const rank=t=> (bi[t.id]!=null ? bi[t.id] : 100000+(Number(t.seq)||0));
+  return [...state.trades].filter(t=>!t.practice).sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : (rank(a)-rank(b)));
 }
 function curAcct(){ return (state.ui&&state.ui.fAcct)||"all"; }
 function curRange(){ return (state.ui&&state.ui.fRange)||"all"; }
